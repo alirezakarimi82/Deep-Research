@@ -23,10 +23,10 @@ User request → Plan → Gather (MCP tools) → Rank → Retrieve → Synthesis
 | Native task tracker | ✅ | ✅ | — | — |
 | `.tasks.md` fallback tracker | — | — | ✅ | ✅ |
 
-> **Copilot prerequisite:** MCP is disabled by default in GitHub
-> organizations. An org admin must enable it under
-> Organization → Settings → Copilot → MCP before any MCP config file
-> takes effect.
+> **Copilot org prerequisite:** MCP is disabled by default for Copilot
+> Business and Enterprise plans. An org admin must enable it under
+> Organization → Settings → Copilot → MCP. Individual Free and Pro plans
+> have MCP available without any additional toggle.
 
 ---
 
@@ -43,16 +43,16 @@ export SEMANTIC_SCHOLAR_KEY="..."    # optional
 export OPENALEX_API_KEY="..."        # optional
 
 # 3. Start your agent
-opencode               # OpenCode      — reads opencode.json
-claude                 # Claude Code   — reads .mcp.json / .claude/mcp.json
-copilot        # Copilot CLI   — reads .copilot/mcp-config.json
-# VS Code: open workspace, switch Copilot Chat to agent mode (the ⚡ icon)
+opencode               # OpenCode    — reads opencode.json
+claude                 # Claude Code — reads .mcp.json / .claude/mcp.json
+copilot                # Copilot CLI — reads .copilot/mcp-config.json
+# VS Code: open workspace, Copilot Chat → mode dropdown → Agent
 
 # 4. Verify MCP servers are live
 /mcp                   # Claude Code
-/mcp                   # OpenCode
+:mcp                   # OpenCode
 /mcp show              # Copilot CLI
-# VS Code: type / in Copilot Chat — deep-research tools appear in completions
+# VS Code: Agent mode → tools icon → server list
 ```
 
 ---
@@ -66,7 +66,7 @@ four platforms.
 |---|---|---|
 | `search_openalex` | `(query, max_results=20)` | 250 M+ works; two-pass (recent + seminal). Full-text PDF gate on **both** passes when API key is set. |
 | `search_semantic_scholar` | `(query, max_results=20)` | AI TLDRs, citation graph, OA PDFs. Two-pass. |
-| `search_crossref` | `(query, max_results=20, from_year=None)` | DOI metadata + **parallel** Unpaywall enrichment (8 concurrent workers). |
+| `search_crossref` | `(query, max_results=20, from_year=None)` | DOI metadata + **parallel** Unpaywall OA PDF enrichment (8 concurrent workers). |
 | `search_wikipedia` | `(query, max_results=5)` | Real article leads via REST API (not just snippets). |
 | `search_hackernews` | `(query, max_results=10)` | Practitioner discussions via Algolia. |
 | `search_reddit` | `(query, subreddit="all", max_results=10)` | Community knowledge; subreddit routing available. |
@@ -74,17 +74,18 @@ four platforms.
 | `extract_content` | `(url)` | Jina Reader → trafilatura → BeautifulSoup fallback. |
 | `parse_pdf` | `(url)` | **Streamed download, 50 MB hard cap**; pdfplumber → PyMuPDF fallback. |
 
-**Server-side guarantees you can rely on:**
+**Server-side guarantees:**
 
 - Abstract-only and closed-access papers are dropped by the full-text
-  gate before `rank_and_filter` returns them — no pre-filtering needed.
+  gate before returning — no pre-filtering needed.
 - DOI duplicates across sources are merged at the field level: the
-  ranked result carries the PDF URL from OpenAlex, the TLDR from
+  ranked output carries the PDF URL from OpenAlex, the TLDR from
   Semantic Scholar, and the venue from Crossref as a single entry.
 - Web sources must carry either a URL or a ≥200-char snippet to pass
   the gate.
-- `parse_pdf` returning empty string = 50 MB cap exceeded or no
-  extractable text — treat as inaccessible and move on.
+- `parse_pdf` returning empty string means the file exceeded the 50 MB
+  cap or contained only scanned images — treat as inaccessible and
+  move on.
 
 ### External MCP servers
 
@@ -112,9 +113,9 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 ```
 
 The setup script creates `.venv`, installs `requirements.txt`, copies
-`config.example.yaml` → `config.yaml` if missing, runs an MCP server
-import smoke test (verifies stdout is clean), and optionally runs the
-29-test unit suite.
+`config.example.yaml` → `config.yaml` if missing, runs an import smoke
+test (verifies the MCP server writes nothing to stdout), and optionally
+runs the 29-test unit suite.
 
 ### Step 2 — API keys
 
@@ -141,7 +142,7 @@ export OPENALEX_API_KEY="..."
 $env:UNPAYWALL_EMAIL      = "you@example.com"
 $env:SEMANTIC_SCHOLAR_KEY = "..."
 $env:OPENALEX_API_KEY     = "..."
-# For persistence across sessions:
+# For persistence:
 [Environment]::SetEnvironmentVariable("UNPAYWALL_EMAIL","you@example.com","User")
 ```
 
@@ -161,7 +162,7 @@ analysis:
   dedup_threshold: 0.85           # fuzzy title similarity cutoff (0–1)
   recent_years: 3                 # "recent" bucket: papers within N years
   seminal_threshold: 100          # "seminal" bucket: cited_by_count >= N
-  recent_share: 0.40              # fraction of top_n drawn from recent bucket
+  recent_share: 0.40              # fraction of top_n from recent bucket
   seminal_share: 0.30             # fraction from seminal (rest goes to middle)
 ```
 
@@ -208,7 +209,7 @@ mkdir -p .claude/skills/deep-research
 cp SKILL-claude-code.md .claude/skills/deep-research/SKILL.md
 cp SKILL-core.md        .claude/skills/deep-research/
 
-# Global (available in all projects)
+# Global (all projects)
 mkdir -p ~/.claude/skills/deep-research
 cp SKILL-claude-code.md ~/.claude/skills/deep-research/SKILL.md
 cp SKILL-core.md        ~/.claude/skills/deep-research/
@@ -220,8 +221,8 @@ cp SKILL-core.md        ~/.claude/skills/deep-research/
 /deep-research  write a report on BESS degradation and bidding in CAISO
 ```
 
-Plan mode activates automatically at Step 1 (`EnterPlanMode`). Confirm
-the plan to begin gathering. Verify MCP servers with `/mcp`.
+Plan mode activates automatically at Step 1. Confirm the plan to begin
+gathering. Verify MCP servers: `/mcp`.
 
 ---
 
@@ -261,38 +262,55 @@ cp SKILL-opencode.md ~/.config/opencode/skills/deep-research/SKILL.md
 cp SKILL-core.md     ~/.config/opencode/skills/deep-research/
 ```
 
-The skill directory name must match the `name:` frontmatter field
-(`deep-research`).
-
 ### Usage
 
 ```
 /deep-research  research solid electrolyte interphase formation mechanisms
 ```
 
-Use the **Plan** agent tab (Tab) to review the plan before confirming.
-Switch back to **Build** to begin gathering. Verify MCP with `:mcp`.
-Toggle `/dcp` to reduce context on long Extensive-length runs.
+Use the **Plan** tab (Tab key) to review the plan before confirming.
+Switch to **Build** to begin gathering. Verify MCP: `:mcp`. Toggle
+`/dcp` to prune context on long Extensive-length runs.
 
 ---
 
 ## Platform setup — Copilot CLI
 
-### Prerequisites
+### Installation
+
+Copilot CLI is a standalone npm package. Node.js 22 or later is
+required.
 
 ```bash
-gh extension install github/gh-copilot
-gh extension upgrade gh-copilot    # ensure 1.x or later
-gh copilot --version
+# npm (all platforms)
+npm install -g @github/copilot
+
+# macOS (Homebrew)
+brew install github-copilot
+
+# Windows (WinGet)
+winget install GitHub.CopilotCLI
 ```
 
-**Organization accounts:** an org admin must enable MCP under
-Organization → Settings → Copilot → MCP.
+Authenticate on first launch:
+
+```bash
+copilot
+/login     # browser flow; token stored in ~/.copilot/
+```
+
+For headless or CI use, set `COPILOT_GITHUB_TOKEN` (or `GH_TOKEN` /
+`GITHUB_TOKEN`) to a fine-grained PAT with the "Copilot Requests"
+permission instead of using the browser flow.
+
+> **Organization accounts:** an org admin must enable the Copilot CLI
+> policy under Organization → Settings → Copilot before members can
+> use it.
 
 ### MCP configuration
 
-The shipped `.copilot/mcp-config.json` is ready for project-scoped
-use. For global:
+The shipped `.copilot/mcp-config.json` is ready for project-scoped use.
+For global setup:
 
 ```bash
 cp .copilot/mcp-config.json ~/.copilot/mcp-config.json
@@ -300,23 +318,45 @@ cp .copilot/mcp-config.json ~/.copilot/mcp-config.json
 ```
 
 Config precedence (highest → lowest):
-1. `--additional-mcp-config <path>` CLI flag
+1. `--additional-mcp-config <path>` flag on the `copilot` command
 2. Project `.copilot/mcp-config.json`
 3. User `~/.copilot/mcp-config.json`
 
-Verify:
+Add or modify servers interactively from inside a session:
+
 ```
-gh copilot chat
+/mcp add
+```
+
+Verify all registered servers and their tools:
+
+```
 /mcp show
 ```
 
+> **Note:** if you already have `.vscode/mcp.json` for VS Code, the
+> `servers` root key needs to be renamed to `mcpServers` for Copilot
+> CLI. The shipped `.copilot/mcp-config.json` already uses the correct
+> format — use it directly.
+
 ### Skill installation
 
-Copilot CLI picks up skills from several directories, including
-`.claude/skills/` — so Claude Code users are often already set up.
+Copilot CLI picks up skills from the following locations (first match
+wins for duplicate names):
+
+| Location | Scope |
+|---|---|
+| `~/.copilot/skills/<name>/SKILL.md` | Personal / all projects |
+| `.github/skills/<name>/SKILL.md` | Project |
+| `.claude/skills/<name>/SKILL.md` | Also auto-discovered |
+| `.agents/skills/<name>/SKILL.md` | Project |
+
+If the skill is already installed for Claude Code in `.claude/skills/`,
+Copilot CLI picks it up automatically — just ensure `SKILL-core.md` is
+alongside the overlay file.
 
 ```bash
-# Personal (all projects)
+# Personal (recommended)
 mkdir -p ~/.copilot/skills/deep-research
 cp SKILL-copilot.md ~/.copilot/skills/deep-research/SKILL.md
 cp SKILL-core.md    ~/.copilot/skills/deep-research/
@@ -327,7 +367,8 @@ cp SKILL-copilot.md .github/skills/deep-research/SKILL.md
 cp SKILL-core.md    .github/skills/deep-research/
 ```
 
-Verify inside a session:
+Verify:
+
 ```
 /skills list
 /skills info deep-research
@@ -335,14 +376,23 @@ Verify inside a session:
 
 ### Usage
 
+Interactive session:
+
 ```bash
-gh copilot chat
+copilot
 /deep-research  research lithium dendrite suppression in solid-state batteries
 ```
 
-Plan mode: **Shift+Tab** to enter, **Shift+Tab** again to switch to
-autopilot and confirm. Use `/fleet` for broad topics requiring parallel
-subagent branches (the skill triggers this automatically).
+Non-interactive (scripting / CI):
+
+```bash
+copilot -p "Use the deep-research skill to write a report on BESS arbitrage in CAISO"
+```
+
+**Plan mode:** Shift+Tab to enter, Shift+Tab again to switch to
+autopilot and confirm. Use `/model` to switch models mid-session. Use
+`/fleet` for parallel subagent branches on broad topics — the skill
+triggers this automatically when the query warrants it.
 
 ---
 
@@ -350,15 +400,23 @@ subagent branches (the skill triggers this automatically).
 
 ### Prerequisites
 
-- VS Code 1.99 or later (April 2025)
+- VS Code 1.99 or later (current release: 1.116, May 2026)
 - GitHub Copilot + Copilot Chat extensions, signed in
-- Agent mode: Copilot Chat panel → click the ⚡ icon
+- Agent mode: Copilot Chat → mode dropdown → **Agent**
 
-**Organization accounts:** same org admin MCP prerequisite as CLI.
+MCP tools are only active in **Agent mode**. They are invisible in
+Ask and Edit modes.
+
+> **Organization accounts:** for Copilot Business or Enterprise plans,
+> an org admin must enable the "MCP servers in Copilot" policy under
+> Organization → Settings → Copilot → MCP. Individual Free and Pro plans
+> have MCP available without any additional toggle.
 
 ### MCP configuration
 
-The shipped `.vscode/mcp.json` is ready for workspace use:
+The shipped `.vscode/mcp.json` is ready for workspace use. VS Code uses
+`"servers"` as the root key (different from Claude Code's
+`"mcpServers"`):
 
 ```json
 {
@@ -379,18 +437,20 @@ The shipped `.vscode/mcp.json` is ready for workspace use:
 }
 ```
 
-For user-level config (all workspaces), open VS Code settings (JSON)
-and add:
+For user-level config (all workspaces): Command Palette →
+**MCP: Open User Configuration** → add the same `servers` block.
 
-```json
-{
-  "mcp": {
-    "servers": { ...same block... }
-  }
-}
-```
+You can also use Command Palette → **MCP: Add Server** for a guided
+flow, or browse the built-in MCP gallery: Extensions view → search
+`@mcp`.
 
-Verify: Copilot Chat (agent mode) → type `/` → MCP tool names appear.
+After adding or editing `mcp.json`, a **Start** button appears at the
+top of the file — click it to start the servers and discover their
+tools. Enable `chat.mcp.autoStart` in settings to have VS Code restart
+servers automatically on config changes.
+
+Verify: Agent mode → tools icon (top-left of chat box) → all configured
+servers and tools appear in the list.
 
 ### Skill installation
 
@@ -408,28 +468,26 @@ cp SKILL-core.md    ~/.config/copilot/skills/deep-research/
 
 ### Usage
 
-In Copilot Chat (agent mode ⚡):
+In Copilot Chat (Agent mode):
 
 ```
 /deep-research  comprehensive review of hydrogen storage materials
 ```
 
-The skill presents the plan in chat and waits for "yes" before
-gathering. Subagent branches on broad topics run sequentially (VS Code
-agent mode has limited parallel support compared to Copilot CLI's
-`/fleet`).
+The skill writes the plan to `reports/.plans/<slug>.md`, presents it in
+chat, and waits for your explicit "yes" before gathering begins.
+
+MCP tools are only active in Agent mode. If tool calls are not
+executing, check the mode dropdown.
 
 ---
 
 ## Skill architecture
 
-The skill is split into a shared core and thin platform overlays so
-nothing is duplicated.
-
 | File | Purpose |
 |---|---|
-| `SKILL-core.md` | Platform-agnostic playbook — integrity commandments, full MCP tool reference, source quality tiers, workflow Steps 0–7, source note format, LaTeX conventions. Uses abstract verbs only. |
-| `SKILL-claude-code.md` | Claude Code overlay — verb → tool mapping, mandatory plan-mode flow, `AskUserQuestion` schema, `Agent` subagents. |
+| `SKILL-core.md` | Shared platform-agnostic playbook — integrity commandments, full MCP tool reference, source quality tiers, workflow Steps 0–7, source note format, LaTeX conventions. Uses abstract verbs only. |
+| `SKILL-claude-code.md` | Claude Code overlay — verb → tool mapping, plan-mode flow, `AskUserQuestion` schema, `Agent` subagents. |
 | `SKILL-opencode.md` | OpenCode overlay — verb → tool mapping, write-plan-then-confirm flow, `question` schema, `Task` subagents. |
 | `SKILL-copilot.md` | Copilot overlay covering both CLI and VS Code — verb → tool mapping, prose-question flow, `/fleet` and `.agent.md` subagents, `.tasks.md` tracker. |
 
@@ -461,9 +519,9 @@ pytest tests/
 
 29 pure-logic unit tests for the ranker: full-text gate, DOI dedup with
 field merge, fuzzy title dedup, temporal bucketing, year extraction edge
-cases, `top_n` boundary conditions (including `top_n=0` and `top_n=1`),
-and end-to-end ranking on a mixed multi-source corpus. Run automatically
-by the setup scripts when pytest is available.
+cases, `top_n` boundary conditions, and end-to-end ranking on a mixed
+multi-source corpus. Run automatically by the setup scripts when pytest
+is available.
 
 ---
 
@@ -492,7 +550,7 @@ python mcp_server.py
 | Claude Code | `/mcp` |
 | OpenCode | `:mcp` |
 | Copilot CLI | `/mcp show` |
-| VS Code Copilot | Type `/` in chat panel → MCP tools appear in completions |
+| VS Code Copilot | Agent mode → tools icon → server list |
 
 ---
 
@@ -500,49 +558,52 @@ python mcp_server.py
 
 **MCP tools not appearing**
 
-- Confirm `python mcp_server.py` starts cleanly (stderr only, nothing
-  on stdout).
-- Claude Code / OpenCode: verify the `cwd` or server path in your MCP
-  config is correct.
-- Copilot (CLI or VS Code): confirm org MCP policy is enabled.
-- Restart the agent after any MCP config change — servers register at
-  startup.
+- Confirm `python mcp_server.py` starts with nothing on stdout.
+- Claude Code / OpenCode: verify the `cwd` or server path is absolute
+  and correct.
+- Copilot CLI: run `/mcp show`. Check the `deep-research` entry points
+  to the right directory.
+- VS Code: MCP tools are **only visible in Agent mode**. Check the mode
+  dropdown. Click the **Start** button in `mcp.json` if servers haven't
+  launched. If servers share a name with another configured server, VS
+  Code will disable the less-specific one — check for name collisions
+  under Extensions → `@mcp @installed`.
+- All platforms: restart the agent after any MCP config change.
 
 **`rank_and_filter` returns fewer sources than expected**
 
 The full-text gate dropped abstract-only entries. Check stderr for
 `Dropped N abstract-only / inaccessible sources`. To widen the pool:
 add `from_year` to `search_crossref`, or lower `dedup_threshold` in
-`config.yaml` if near-duplicates are being over-collapsed.
+`config.yaml`.
 
 **Unpaywall enrichment is slow**
 
-The 8-worker concurrent enrichment is already active. If still slow,
-reduce `max_results` in `search_crossref` or add `from_year` to shrink
-the enrichment batch.
+The 8-worker concurrent enrichment is already active. Reduce
+`max_results` in `search_crossref` or add `from_year` to shrink the
+batch.
 
 **`parse_pdf` returns empty string**
 
 The PDF exceeded the 50 MB cap, or contains only scanned images without
 OCR text. Note the URL as inaccessible in the source note and continue.
 
-**`alphaxiv` tools fail with connection error**
+**`alphaxiv` tools fail with a connection error**
 
 The remote server at `api.alphaxiv.org` is temporarily unreachable.
-Skip all three alphaxiv tools for this session and rely on
+Skip all three alphaxiv tools for this session and proceed with
 `search_openalex`, `search_semantic_scholar`, and `search_crossref`.
 
 **LaTeX compilation fails**
 
-Ensure `pdflatex` and `bibtex` are installed. The compile script in the
-core must run three pdflatex passes plus one bibtex pass — running a
-single pass will leave references unresolved. Check for missing `.bib`
-entries (every `\cite{key}` must have a match).
+Ensure `pdflatex` and `bibtex` are installed. The compile script must
+run three pdflatex passes plus one bibtex pass — a single pass leaves
+references unresolved. Check that every `\cite{key}` has a matching
+`.bib` entry.
 
 **Smoke test fails (stdout not clean)**
 
-Something in the import chain is calling `print()` to stdout. Isolate
-it:
+Isolate the offending call:
 
 ```bash
 python -c "
@@ -556,9 +617,7 @@ print('Captured:', repr(buf.getvalue()))
 "
 ```
 
-The output identifies the exact string. The most common fix is
-redirecting a stray `print()` call in a source or analysis module to
-`utils.log.info(...)`.
+Redirect any stray `print()` to `utils.log.info(...)`.
 
 ---
 
