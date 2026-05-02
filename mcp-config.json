@@ -1,0 +1,35 @@
+{
+  "$schema": "https://cli.github.com/copilot/mcp-config-schema.json",
+
+  "mcpServers": {
+
+    "deep-research": {
+      "type": "stdio",
+      "command": "python",
+      "args": ["mcp_server.py"],
+      "cwd": "${workspaceFolder}",
+      "description": "Deep-research pipeline: OpenAlex, Semantic Scholar, Crossref/Unpaywall, Wikipedia, Reddit, HackerNews, PDF extraction, ranking/dedup"
+    },
+
+    "alphaxiv": {
+      "type": "sse",
+      "url": "https://api.alphaxiv.org/mcp/v1",
+      "description": "arXiv semantic search, full-text retrieval, and PDF Q&A via AlphaXiv"
+    },
+
+    "ddgs": {
+      "type": "stdio",
+      "command": "ddgs",
+      "args": ["mcp"],
+      "description": "DuckDuckGo web search, news search, book search, and content extraction"
+    },
+
+    "playwright": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["@playwright/mcp@latest", "--headless"],
+      "description": "Headless browser for JS-heavy pages (last-resort extraction fallback only)"
+    }
+
+  }
+}

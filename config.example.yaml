@@ -1,0 +1,40 @@
+# ======================================================
+#  DeepResearch MCP Server -- config.example.yaml
+#
+#  Copy to config.yaml and fill in your own values, OR
+#  set the corresponding environment variables (which
+#  override config.yaml when both are present):
+#
+#    SEMANTIC_SCHOLAR_KEY
+#    UNPAYWALL_EMAIL
+#    OPENALEX_API_KEY
+#
+#  All API keys are optional unless noted.
+# ======================================================
+
+# Semantic Scholar: free key at semanticscholar.org/product/api
+# Unlocks 10k req/min instead of 100/5min (highly recommended)
+semantic_scholar_key: ""
+
+# Unpaywall: just your email -- finds legal OA PDFs for paywalled papers.
+# 100k requests/day. NO registration needed, email is a courtesy ID.
+unpaywall_email: "research@example.com"
+
+# OpenAlex API key (optional -- unlocks semantic search + full-text PDFs).
+# Register at: https://openalex.org/api-key
+openalex_api_key: ""
+
+analysis:
+  # Hard cap on sources passed to rank_and_filter
+  max_sources_for_synthesis: 30
+  # Fuzzy title similarity threshold for deduplication (0-1)
+  dedup_threshold: 0.85
+
+  # Temporal balance -- shares must sum to <= 1.0
+  #   "recent"  = published within recent_years
+  #   "seminal" = cited_by_count >= seminal_threshold
+  #   "middle"  = everything else; gets (1 - recent_share - seminal_share)
+  recent_years: 3
+  seminal_threshold: 100
+  recent_share: 0.40
+  seminal_share: 0.30

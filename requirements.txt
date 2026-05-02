@@ -1,0 +1,20 @@
+# -- Core ----------------------------------------------------------------------
+httpx>=0.27.0
+pyyaml>=6.0
+tenacity>=8.3              # retry with exponential backoff for API calls
+
+# -- Web search via ddgs MCP server (no API key) -------------------------------
+# Run `ddgs mcp` to start the stdio MCP server for OpenCode/Claude Code integration.
+ddgs[api]>=9.12.0
+
+# -- Content extraction --------------------------------------------------------
+trafilatura>=1.9
+beautifulsoup4>=4.12
+lxml>=5.0
+
+# -- PDF parsing ---------------------------------------------------------------
+pdfplumber>=0.11
+pymupdf>=1.24          # pip install pymupdf  (provides the 'fitz' module)
+
+# -- MCP server (exposes pipeline tools to the AI agent via stdio) -------------
+fastmcp>=2.0

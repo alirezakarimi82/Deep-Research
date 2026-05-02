@@ -1,0 +1,50 @@
+{
+  // Deep Research — VS Code MCP server configuration
+  // Place this file at .vscode/mcp.json in your workspace root.
+  //
+  // Requires: Copilot Chat in agent mode (the ⚡ icon in the chat panel).
+  // MCP support was stable-released in VS Code 1.99+ (April 2025).
+  // Update VS Code if /mcp tools are not appearing.
+  //
+  // Environment variables used by the deep-research server:
+  //   OPENALEX_API_KEY      — optional; unlocks semantic search + full-text PDFs
+  //   SEMANTIC_SCHOLAR_KEY  — optional; raises SS rate limit to 10k req/min
+  //   UNPAYWALL_EMAIL       — recommended; polite-pool OA PDF lookup
+  //
+  // Set them in your shell before launching VS Code so they are inherited,
+  // or configure them in the "env" block of the deep-research entry below.
+
+  "servers": {
+
+    "deep-research": {
+      "type": "stdio",
+      "command": "python",
+      "args": ["${workspaceFolder}/mcp_server.py"],
+      // Uncomment the env block to hard-code keys (not recommended for
+      // shared repos — prefer shell env vars or a .env loader):
+      // "env": {
+      //   "OPENALEX_API_KEY":     "",
+      //   "SEMANTIC_SCHOLAR_KEY": "",
+      //   "UNPAYWALL_EMAIL":      "you@example.com"
+      // }
+    },
+
+    "alphaxiv": {
+      "type": "sse",
+      "url": "https://api.alphaxiv.org/mcp/v1"
+    },
+
+    "ddgs": {
+      "type": "stdio",
+      "command": "ddgs",
+      "args": ["mcp"]
+    },
+
+    "playwright": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["@playwright/mcp@latest", "--headless"]
+    }
+
+  }
+}

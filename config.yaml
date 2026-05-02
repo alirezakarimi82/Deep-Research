@@ -1,0 +1,15 @@
+# Local config -- fill in your own values.
+# Environment variables (SEMANTIC_SCHOLAR_KEY, UNPAYWALL_EMAIL, OPENALEX_API_KEY)
+# override these when set.  See config.example.yaml for the full schema.
+
+semantic_scholar_key: ""
+unpaywall_email: "research@example.com"
+openalex_api_key: ""
+
+analysis:
+  max_sources_for_synthesis: 30
+  dedup_threshold: 0.85
+  recent_years: 3
+  seminal_threshold: 100
+  recent_share: 0.40
+  seminal_share: 0.30
