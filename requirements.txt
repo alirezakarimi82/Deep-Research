@@ -3,6 +3,10 @@ httpx>=0.27.0
 pyyaml>=6.0
 tenacity>=8.3              # retry with exponential backoff for API calls
 
+# -- Config --------------------------------------------------------------------
+python-dotenv>=1.0         # optional .env file support (load_config falls back
+                           # gracefully if this is not installed)
+
 # -- Web search via ddgs MCP server (no API key) -------------------------------
 # Run `ddgs mcp` to start the stdio MCP server for OpenCode/Claude Code integration.
 ddgs[api]>=9.12.0
