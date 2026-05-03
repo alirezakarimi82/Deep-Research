@@ -16,7 +16,7 @@ description: Run a thorough, source-heavy investigation on any topic. Use when t
 >
 > This overlay covers **both** surfaces:
 > - **Copilot CLI** (`copilot` in the terminal)
-> - **Copilot in VS Code** (agent mode in the Copilot Chat panel)
+> - **Copilot in VS Code** (agent mode — Copilot Chat → mode dropdown → Agent)
 > Where behavior differs between the two, it is called out explicitly.
 
 ---
@@ -259,16 +259,17 @@ Use the deep-research skill to write a report on BESS arbitrage in CAISO.
    /mcp show             -- all configured MCP servers and their tools
    /skills list          -- should show deep-research
    ```
-   From VS Code: open Copilot Chat, switch to agent mode (the ⚡ icon),
+   From VS Code: open Copilot Chat, switch to Agent mode (mode dropdown),
    type `/` — `deep-research` should appear in the skill completions.
 
 ---
 
 ## Reminders specific to Copilot
 
-- MCP is **disabled by default in GitHub organizations**. An org admin
-  must enable it under Organization → Settings → Copilot → MCP before
-  `/mcp add` or the config file takes effect.
+- MCP is disabled by default for **Copilot Business and Enterprise** plans.
+  An org admin must enable it under Organization → Settings → Copilot → MCP
+  before `/mcp add` or the config file takes effect. Individual Free and Pro
+  plans have MCP available without any additional toggle.
 - Copilot CLI MCP config precedence (highest → lowest):
   `--additional-mcp-config` flag → project `.copilot/mcp-config.json` →
   user `~/.copilot/mcp-config.json`.
