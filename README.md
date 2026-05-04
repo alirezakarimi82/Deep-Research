@@ -10,6 +10,32 @@ User request → Plan → Gather (MCP tools) → Rank → Retrieve → Synthesis
 
 ---
 
+## Contents
+
+**Setup**
+[Platform compatibility](#platform-compatibility) ·
+[Quick start](#quick-start) ·
+[Installation — all platforms](#installation--all-platforms) ·
+[API keys](#step-2--api-keys) ·
+[Ranker tuning](#step-3--ranker-tuning-optional)
+
+**Platform guides**
+[Claude Code](#platform-setup--claude-code) ·
+[OpenCode](#platform-setup--opencode) ·
+[Copilot CLI](#platform-setup--copilot-cli) ·
+[Copilot VS Code](#platform-setup--copilot-in-vs-code)
+
+**Reference**
+[MCP pipeline tools](#mcp-pipeline-tools) ·
+[Skill architecture](#skill-architecture) ·
+[Workflow summary](#workflow-summary) ·
+[Tests](#tests) ·
+[Verifying the install](#verifying-the-install) ·
+[Troubleshooting](#troubleshooting) ·
+[File structure](#file-structure)
+
+---
+
 ## Platform compatibility
 
 | Feature | Claude Code | OpenCode | Copilot CLI | Copilot VS Code |
@@ -120,8 +146,15 @@ runs the 29-test unit suite.
 ### Step 2 — API keys
 
 All keys are optional but improve rate limits and unlock features.
-**Preferred path: environment variables** — they override `config.yaml`
-and keep secrets out of version control.
+
+Keys are resolved in this order — use whichever approach suits your workflow:
+
+| Priority | Method | Best for |
+|---|---|---|
+| 1 (highest) | Shell environment variables | CI, Docker, shared machines |
+| 2 | `.env` file in project root | Local dev without touching shell profile |
+| 3 | `config.yaml` top-level fields | Non-secret values like `unpaywall_email` |
+| 4 (lowest) | Hard-coded defaults | Zero-config fallback |
 
 | Variable | Where to get | Effect |
 |---|---|---|
@@ -129,27 +162,40 @@ and keep secrets out of version control.
 | `SEMANTIC_SCHOLAR_KEY` | semanticscholar.org/product/api | 10k req/min (vs 100/5 min unauthenticated) |
 | `OPENALEX_API_KEY` | openalex.org/api-key | Semantic embedding search + full-text PDFs |
 
-**macOS / Linux:**
+**Option A — `.env` file (recommended for local dev):**
+
 ```bash
+cp .env.example .env
+# Edit .env and fill in your values — it is gitignored
+```
+
+`.env` is loaded automatically by `config.py` via `python-dotenv`. Shell
+environment variables always override `.env` values, so CI/CD secrets
+set at the system level are never clobbered by a local `.env` file.
+
+**Option B — Shell environment variables:**
+
+```bash
+# macOS / Linux
 export UNPAYWALL_EMAIL="you@example.com"
-export SEMANTIC_SCHOLAR_KEY="..."
-export OPENALEX_API_KEY="..."
+export SEMANTIC_SCHOLAR_KEY="your_key_here"
+export OPENALEX_API_KEY="your_key_here"
 # Add to ~/.zshrc or ~/.bashrc to persist across sessions
 ```
 
-**Windows (PowerShell):**
 ```powershell
+# Windows (PowerShell)
 $env:UNPAYWALL_EMAIL      = "you@example.com"
-$env:SEMANTIC_SCHOLAR_KEY = "..."
-$env:OPENALEX_API_KEY     = "..."
+$env:SEMANTIC_SCHOLAR_KEY = "your_key_here"
+$env:OPENALEX_API_KEY     = "your_key_here"
 # For persistence:
 [Environment]::SetEnvironmentVariable("UNPAYWALL_EMAIL","you@example.com","User")
 ```
 
-**Fallback — `config.yaml`:** copy `config.example.yaml` to
-`config.yaml` and fill in the top-level fields. `config.py` overlays
-env vars over file values at runtime (env vars always win).
-**Never commit `config.yaml` with live keys.**
+**Option C — `config.yaml` fallback:**
+
+Copy `config.example.yaml` to `config.yaml` and fill in the top-level
+fields. **Never commit `config.yaml` with live keys.**
 
 ### Step 3 — Ranker tuning (optional)
 
@@ -627,9 +673,10 @@ Redirect any stray `print()` to `utils.log.info(...)`.
 deep-research/
 │
 ├── mcp_server.py               MCP server — exposes pipeline as stdio tools
-├── config.py                   Config loader (env var overlay over YAML)
+├── config.py                   Config loader (env var → .env → yaml → defaults)
 ├── config.yaml                 Local config — gitignored, never commit with live keys
-├── config.example.yaml         Template — copy to config.yaml to start
+├── config.example.yaml         YAML template — copy to config.yaml to start
+├── .env.example                Secrets template — copy to .env and fill in values
 ├── utils.py                    Stderr logger + retryable_get
 ├── requirements.txt            Python dependencies
 ├── setup.sh                    Unix/macOS setup script
