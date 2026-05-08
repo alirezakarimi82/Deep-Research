@@ -25,8 +25,12 @@ User request → Plan → Gather (MCP tools) → Rank → Retrieve → Synthesis
 [Copilot CLI](#platform-setup--copilot-cli) ·
 [Copilot VS Code](#platform-setup--copilot-in-vs-code)
 
+**MCP & authentication**
+[Pipeline tools](#mcp-pipeline-tools) ·
+[External servers](#external-mcp-servers) ·
+[alphaxiv authentication](#alphaxiv-authentication)
+
 **Reference**
-[MCP pipeline tools](#mcp-pipeline-tools) ·
 [Skill architecture](#skill-architecture) ·
 [Workflow summary](#workflow-summary) ·
 [Tests](#tests) ·
@@ -115,11 +119,103 @@ four platforms.
 
 ### External MCP servers
 
-| Server | Type | Key tools |
-|---|---|---|
-| `alphaxiv` | remote SSE | `alphaxiv_embedding_similarity_search`, `alphaxiv_full_text_papers_search`, `alphaxiv_agentic_paper_retrieval`, `alphaxiv_get_paper_content`, `alphaxiv_answer_pdf_queries` |
-| `ddgs` | local stdio | `ddgs_search_text`, `ddgs_search_news`, `ddgs_search_books`, `ddgs_extract_content` |
-| `playwright` | local stdio | `browser_navigate`, `browser_snapshot` — last-resort JS-heavy page fallback only |
+| Server | Type | Auth | Key tools |
+|---|---|---|---|
+| `alphaxiv` | remote SSE | **OAuth 2.0 required** | `alphaxiv_embedding_similarity_search`, `alphaxiv_full_text_papers_search`, `alphaxiv_agentic_paper_retrieval`, `alphaxiv_get_paper_content`, `alphaxiv_answer_pdf_queries` |
+| `ddgs` | local stdio | none | `ddgs_search_text`, `ddgs_search_news`, `ddgs_search_books`, `ddgs_extract_content` |
+| `playwright` | local stdio | none | `browser_navigate`, `browser_snapshot` — last-resort JS-heavy page fallback only |
+
+> **Note on alphaxiv transport:** alphaxiv uses SSE (Server-Sent Events), which was
+> deprecated in the MCP specification in mid-2025 in favor of streamable HTTP. SSE
+> still works and all four platforms support it, but expect alphaxiv to migrate to
+> HTTP transport in a future release. No action needed on your part until they do.
+
+### alphaxiv authentication
+
+alphaxiv requires **OAuth 2.0** before any of its tools can be used. Each platform
+handles this differently. Authentication is a one-time step per machine; tokens are
+stored locally and refreshed automatically.
+
+**OpenCode**
+
+OpenCode automatically detects the OAuth requirement on first use and opens a browser
+window. To manually trigger the flow (e.g. after a token expires):
+
+```bash
+opencode mcp auth alphaxiv
+```
+
+The `opencode.json` entry must include `"oauth": {}` to signal that OAuth is expected:
+
+```json
+"alphaxiv": {
+  "type": "remote",
+  "url": "https://api.alphaxiv.org/mcp/v1",
+  "oauth": {}
+}
+```
+
+Check auth status for all OAuth-capable servers:
+
+```bash
+opencode mcp auth list    # or: opencode mcp auth ls
+```
+
+Debug connection and OAuth flow if something is wrong:
+
+```bash
+opencode mcp debug alphaxiv
+```
+
+Tokens are stored in `~/.local/share/opencode/mcp-auth.json`.
+
+**Claude Code**
+
+Claude Code auto-discovers OAuth metadata and handles Dynamic Client Registration
+(DCR) automatically. Add the server with the legacy SSE transport (alphaxiv has not
+yet migrated to HTTP):
+
+```bash
+claude mcp add --transport sse alphaxiv https://api.alphaxiv.org/mcp/v1
+```
+
+On first use, Claude Code launches a browser for authorization. To manually
+re-authenticate from the CLI:
+
+```bash
+claude mcp auth alphaxiv
+```
+
+Or re-authenticate from inside a running session without restarting:
+
+```
+/mcp
+```
+
+**Copilot CLI**
+
+Copilot CLI triggers OAuth automatically via Dynamic Client Registration when you
+first call an alphaxiv tool. No extra command is needed — the browser opens and
+tokens are stored in `~/.copilot/mcp-oauth-config/`. To check the status of all
+OAuth-protected servers:
+
+```bash
+copilot
+/mcp show
+```
+
+If the automatic flow fails (e.g. the server does not support DCR), add the server
+interactively with `/mcp add` and supply a pre-registered client ID when prompted.
+
+**Copilot VS Code**
+
+After adding alphaxiv to `.vscode/mcp.json` and clicking **Start**, VS Code detects
+the OAuth requirement and shows a CodeLens **Auth** button directly above the server
+entry in the file. Click **Auth** — a popup window opens for browser-based
+authorization. Once complete, tools become available in agent mode immediately.
+
+If the Auth button does not appear, open Copilot Chat (agent mode) → tools icon →
+find `alphaxiv` in the list → click the key icon next to it.
 
 ---
 
@@ -232,6 +328,7 @@ Create `.mcp.json` in the repo root (project-scoped) or add to
     "alphaxiv": {
       "type": "sse",
       "url": "https://api.alphaxiv.org/mcp/v1"
+      // OAuth required: run `claude mcp auth alphaxiv` or use /mcp in-session
     },
     "ddgs": {
       "command": "ddgs",
@@ -285,7 +382,7 @@ The shipped `opencode.json` is ready to use:
   "permission": { "skill": { "*": "allow" } },
   "mcp": {
     "deep-research": { "type": "local", "command": ["python", "mcp_server.py"] },
-    "alphaxiv":      { "type": "remote", "url": "https://api.alphaxiv.org/mcp/v1" },
+    "alphaxiv":      { "type": "remote", "url": "https://api.alphaxiv.org/mcp/v1", "oauth": {} },
     "ddgs":          { "type": "local",  "command": ["ddgs", "mcp"] },
     "playwright":    { "type": "local",  "command": ["npx", "@playwright/mcp@latest", "--headless"] }
   }
@@ -472,7 +569,7 @@ The shipped `.vscode/mcp.json` is ready for workspace use. VS Code uses
       "command": "python",
       "args": ["${workspaceFolder}/mcp_server.py"]
     },
-    "alphaxiv": { "type": "sse",   "url": "https://api.alphaxiv.org/mcp/v1" },
+    "alphaxiv": { "type": "sse",   "url": "https://api.alphaxiv.org/mcp/v1" },  // OAuth required — click Auth CodeLens after Start
     "ddgs":     { "type": "stdio", "command": "ddgs", "args": ["mcp"] },
     "playwright": {
       "type":    "stdio",
@@ -634,11 +731,16 @@ batch.
 The PDF exceeded the 50 MB cap, or contains only scanned images without
 OCR text. Note the URL as inaccessible in the source note and continue.
 
-**`alphaxiv` tools fail with a connection error**
+**`alphaxiv` tools fail with a connection or auth error**
 
-The remote server at `api.alphaxiv.org` is temporarily unreachable.
-Skip all three alphaxiv tools for this session and proceed with
-`search_openalex`, `search_semantic_scholar`, and `search_crossref`.
+Two possible causes:
+
+- **Not authenticated:** alphaxiv requires OAuth 2.0 before any tools work.
+  See the [alphaxiv authentication](#alphaxiv-authentication) section for
+  per-platform steps. Tokens expire — re-run the auth command if you see 401 errors.
+- **Server unreachable:** `api.alphaxiv.org` is temporarily down.
+  Skip all three alphaxiv tools for this session and proceed with
+  `search_openalex`, `search_semantic_scholar`, and `search_crossref`.
 
 **LaTeX compilation fails**
 
