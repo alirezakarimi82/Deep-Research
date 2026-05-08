@@ -3,8 +3,9 @@
 .SYNOPSIS
     DeepResearch Framework -- Windows PowerShell setup script.
 .DESCRIPTION
-    Creates a virtual environment, installs all dependencies,
-    runs an import smoke test, and prints next steps.
+    Creates a virtual environment, installs dependencies, runs smoke tests,
+    and installs the skill files into the correct directory for your chosen
+    agent platform(s).
 .NOTES
     Run from the deep-research directory:
         Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
@@ -20,12 +21,18 @@ Set-Location $ScriptDir
 function Write-OK   { param($msg) Write-Host "  [OK]  $msg" -ForegroundColor Green }
 function Write-Warn { param($msg) Write-Host "  [!!]  $msg" -ForegroundColor Yellow }
 function Write-Err  { param($msg) Write-Host "  [XX]  $msg" -ForegroundColor Red }
+function Write-Head { param($msg) Write-Host $msg -ForegroundColor Cyan }
+function Write-Sep  { Write-Host "-------------------------------------------" }
 
 Write-Host ""
-Write-Host "==========================================" -ForegroundColor Cyan
-Write-Host "  DeepResearch Framework - Setup (Win)"   -ForegroundColor Cyan
-Write-Host "==========================================" -ForegroundColor Cyan
+Write-Head "=========================================="
+Write-Head "  DeepResearch Framework - Setup (Win)"
+Write-Head "=========================================="
 Write-Host ""
+
+# ==============================================================================
+# PART 1 -- Python environment and dependencies
+# ==============================================================================
 
 # -- Python version check ------------------------------------------------------
 $PyCmd = $null
@@ -34,10 +41,8 @@ foreach ($candidate in @("python", "python3", "py")) {
         $ver = & $candidate --version 2>&1
         if ($ver -match "Python (\d+)\.(\d+)") {
             $major = [int]$Matches[1]; $minor = [int]$Matches[2]
-            # Accept Python 3.10+ OR any future 4.x
             if (($major -gt 3) -or ($major -eq 3 -and $minor -ge 10)) {
-                $PyCmd = $candidate
-                break
+                $PyCmd = $candidate; break
             }
         }
     } catch {}
@@ -58,7 +63,6 @@ if (-not (Test-Path ".venv")) {
     Write-OK ".venv already exists -- skipping"
 }
 
-# Activate
 $ActivateScript = ".\.venv\Scripts\Activate.ps1"
 if (-not (Test-Path $ActivateScript)) {
     Write-Err "Activate script not found at $ActivateScript"
@@ -67,7 +71,6 @@ if (-not (Test-Path $ActivateScript)) {
 . $ActivateScript
 Write-OK "Virtual environment activated"
 
-# -- Pip upgrade ---------------------------------------------------------------
 python -m pip install -q --upgrade pip
 
 # -- Python dependencies -------------------------------------------------------
@@ -75,17 +78,27 @@ Write-Host "  Installing Python dependencies ..."
 pip install -q -r requirements.txt
 Write-OK "Python packages installed"
 
-# -- Reports directory ---------------------------------------------------------
+# -- reports directory ---------------------------------------------------------
 if (-not (Test-Path "reports")) {
     New-Item -ItemType Directory -Path "reports" | Out-Null
 }
 Write-OK "reports\ directory ready"
 
-# -- Config file ---------------------------------------------------------------
+# -- .env file -----------------------------------------------------------------
+if (-not (Test-Path ".env") -and (Test-Path ".env.example")) {
+    Copy-Item ".env.example" ".env"
+    Write-OK "Created .env from .env.example -- fill in your API keys"
+} elseif (Test-Path ".env") {
+    Write-OK ".env present"
+} else {
+    Write-Warn "No .env.example found -- create .env manually with your API keys"
+}
+
+# -- config.yaml ---------------------------------------------------------------
 if (-not (Test-Path "config.yaml")) {
     if (Test-Path "config.example.yaml") {
         Copy-Item "config.example.yaml" "config.yaml"
-        Write-OK "Created config.yaml from config.example.yaml (placeholder values)"
+        Write-OK "Created config.yaml from config.example.yaml"
     } else {
         Write-Warn "config.yaml missing and no template found"
     }
@@ -93,23 +106,26 @@ if (-not (Test-Path "config.yaml")) {
     Write-OK "config.yaml present"
 }
 
-# -- Secret check --------------------------------------------------------------
-$HaveAny = $false
+# -- API key check -------------------------------------------------------------
+$haveKeys = $false
 foreach ($v in @("SEMANTIC_SCHOLAR_KEY", "OPENALEX_API_KEY", "UNPAYWALL_EMAIL")) {
-    if ([Environment]::GetEnvironmentVariable($v)) { $HaveAny = $true; break }
+    if ([Environment]::GetEnvironmentVariable($v)) { $haveKeys = $true; break }
 }
-if (-not $HaveAny) {
-    Write-Warn "No API-key env vars detected (SEMANTIC_SCHOLAR_KEY, OPENALEX_API_KEY, UNPAYWALL_EMAIL)"
-    Write-Warn "The pipeline will still run, but rate limits will be lower."
-    Write-Warn "See the 'Next steps' section below to configure keys."
+if (-not $haveKeys -and (Test-Path ".env")) {
+    $envContent = Get-Content ".env" -Raw
+    if ($envContent -match '(?m)^(SEMANTIC_SCHOLAR_KEY|OPENALEX_API_KEY|UNPAYWALL_EMAIL)=.+') {
+        $haveKeys = $true
+    }
+}
+if (-not $haveKeys) {
+    Write-Warn "No API keys found in env vars or .env -- pipeline works without them"
+    Write-Warn "but rate limits will be lower. Edit .env to add keys."
 }
 
-# -- Smoke test: stdout must be clean on import --------------------------------
-# The MCP server speaks stdio; any accidental print() to stdout corrupts the
-# JSON-RPC stream. This test catches regressions of that class of bug.
+# -- Smoke test ----------------------------------------------------------------
 Write-Host "  Running import smoke test ..."
 $smokeCode = "import sys; sys.path.insert(0,'.'); import mcp_server"
-$smokeOut = python -c $smokeCode 2>$null
+$smokeOut  = python -c $smokeCode 2>$null
 if ([string]::IsNullOrEmpty($smokeOut)) {
     Write-OK "Smoke test passed (stdout clean on import)"
 } else {
@@ -119,53 +135,280 @@ if ([string]::IsNullOrEmpty($smokeOut)) {
     exit 1
 }
 
-# -- Optional: run unit tests --------------------------------------------------
-try {
-    python -c "import pytest" 2>$null
-    $pytestOk = ($LASTEXITCODE -eq 0)
-} catch {
-    $pytestOk = $false
-}
+# -- Optional unit tests -------------------------------------------------------
+try { python -c "import pytest" 2>$null; $pytestOk = ($LASTEXITCODE -eq 0) }
+catch { $pytestOk = $false }
 if ($pytestOk -and (Test-Path "tests")) {
     Write-Host "  Running unit tests ..."
     python -m pytest tests/ -q --no-header
-    if ($LASTEXITCODE -eq 0) {
-        Write-OK "Tests passed"
-    } else {
-        Write-Warn "Some tests failed -- the install may still be usable but investigate"
-    }
+    if ($LASTEXITCODE -eq 0) { Write-OK "Tests passed" }
+    else { Write-Warn "Some tests failed -- investigate before use" }
 }
 
-# -- Next steps ----------------------------------------------------------------
+# ==============================================================================
+# PART 2 -- Platform selection and skill installation
+# ==============================================================================
+
 Write-Host ""
-Write-Host "==========================================" -ForegroundColor Cyan
+Write-Head "=========================================="
+Write-Head "   Platform setup"
+Write-Head "=========================================="
+Write-Host ""
+Write-Host "Which agent platform(s) do you want to configure?"
+Write-Host ""
+Write-Host "  1) Claude Code"
+Write-Host "  2) OpenCode"
+Write-Host "  3) Copilot CLI"
+Write-Host "  4) Copilot VS Code"
+Write-Host "  5) All platforms"
+Write-Host "  6) Skip (manual setup later)"
+Write-Host ""
+$platformInput = Read-Host "Enter numbers separated by spaces (e.g. 1 2)"
+
+$doClaudeCode   = $platformInput -match "\b(1|5)\b"
+$doOpenCode     = $platformInput -match "\b(2|5)\b"
+$doCopilotCLI   = $platformInput -match "\b(3|5)\b"
+$doCopilotVSCode= $platformInput -match "\b(4|5)\b"
+
+$skillName  = "deep-research"
+$installedAny = $false
+
+function Install-Skill {
+    param([string]$DestDir, [string]$OverlayFile)
+    New-Item -ItemType Directory -Path $DestDir -Force | Out-Null
+    Copy-Item $OverlayFile  (Join-Path $DestDir "SKILL.md")   -Force
+    Copy-Item "SKILL-core.md" (Join-Path $DestDir "SKILL-core.md") -Force
+    Write-OK "Skill installed -> $DestDir\"
+}
+
+# -- Claude Code ---------------------------------------------------------------
+if ($doClaudeCode) {
+    Write-Host ""
+    Write-Head "--- Claude Code ---"
+    Write-Host "Install scope:"
+    Write-Host "  1) Personal -- $env:USERPROFILE\.claude\skills\   (all projects, recommended)"
+    Write-Host "  2) Project  -- .claude\skills\                     (this repo only)"
+    $ccScope = Read-Host "Choice [1]"
+    if ([string]::IsNullOrEmpty($ccScope)) { $ccScope = "1" }
+
+    if ($ccScope -eq "2") {
+        $dest = ".claude\skills\$skillName"
+    } else {
+        $dest = Join-Path $env:USERPROFILE ".claude\skills\$skillName"
+    }
+    Install-Skill $dest "SKILL-claude-code.md"
+
+    if (-not (Test-Path ".mcp.json")) {
+        $absDir = $ScriptDir
+        $mcpJson = @"
+{
+  "mcpServers": {
+    "deep-research": {
+      "command": "python",
+      "args": ["mcp_server.py"],
+      "cwd": "$($absDir.Replace('\','\\'))"
+    },
+    "alphaxiv": {
+      "type": "sse",
+      "url": "https://api.alphaxiv.org/mcp/v1"
+    },
+    "ddgs": {
+      "command": "ddgs",
+      "args": ["mcp"]
+    },
+    "playwright": {
+      "command": "npx",
+      "args": ["@playwright/mcp@latest", "--headless"]
+    }
+  }
+}
+"@
+        $mcpJson | Set-Content ".mcp.json" -Encoding UTF8
+        Write-OK "Created .mcp.json for Claude Code (project-scoped MCP config)"
+    } else {
+        Write-OK ".mcp.json already exists -- skipping"
+    }
+
+    $installedAny = $true
+}
+
+# -- OpenCode ------------------------------------------------------------------
+if ($doOpenCode) {
+    Write-Host ""
+    Write-Head "--- OpenCode ---"
+    Write-Host "Install scope:"
+    Write-Host "  1) Project -- .opencode\skills\             (this repo, recommended)"
+    Write-Host "  2) Global  -- $env:USERPROFILE\.config\opencode\skills\"
+    $ocScope = Read-Host "Choice [1]"
+    if ([string]::IsNullOrEmpty($ocScope)) { $ocScope = "1" }
+
+    if ($ocScope -eq "2") {
+        $dest = Join-Path $env:USERPROFILE ".config\opencode\skills\$skillName"
+    } else {
+        $dest = ".opencode\skills\$skillName"
+    }
+    Install-Skill $dest "SKILL-opencode.md"
+
+    if (Test-Path "opencode.json") {
+        Write-OK "opencode.json present -- MCP config already registered for OpenCode"
+    } else {
+        Write-Warn "opencode.json not found -- copy the template from the repo root"
+    }
+
+    $installedAny = $true
+}
+
+# -- Copilot CLI ---------------------------------------------------------------
+if ($doCopilotCLI) {
+    Write-Host ""
+    Write-Head "--- Copilot CLI ---"
+    Write-Host "Install scope:"
+    Write-Host "  1) Personal -- $env:USERPROFILE\.copilot\skills\   (all projects, recommended)"
+    Write-Host "  2) Project  -- .github\skills\                      (this repo only)"
+    $ccliScope = Read-Host "Choice [1]"
+    if ([string]::IsNullOrEmpty($ccliScope)) { $ccliScope = "1" }
+
+    if ($ccliScope -eq "2") {
+        $dest = ".github\skills\$skillName"
+    } else {
+        $dest = Join-Path $env:USERPROFILE ".copilot\skills\$skillName"
+    }
+    Install-Skill $dest "SKILL-copilot.md"
+
+    if ($ccliScope -eq "2") {
+        Write-OK ".copilot\mcp-config.json in repo used for project-scoped MCP"
+    } else {
+        $globalMcp = Join-Path $env:USERPROFILE ".copilot\mcp-config.json"
+        if (-not (Test-Path $globalMcp)) {
+            # Copy and patch the cwd to an absolute path
+            $mcpContent = Get-Content ".copilot\mcp-config.json" -Raw
+            $mcpContent = $mcpContent -replace '"\$\{workspaceFolder\}"', "`"$($ScriptDir.Replace('\','\\'))`""
+            New-Item -ItemType Directory -Path (Split-Path $globalMcp) -Force | Out-Null
+            $mcpContent | Set-Content $globalMcp -Encoding UTF8
+            Write-OK "Copied MCP config -> $globalMcp (absolute path patched)"
+        } else {
+            Write-Warn "$globalMcp already exists -- skipping (merge deep-research entry manually)"
+        }
+    }
+
+    $installedAny = $true
+}
+
+# -- Copilot VS Code -----------------------------------------------------------
+if ($doCopilotVSCode) {
+    Write-Host ""
+    Write-Head "--- Copilot VS Code ---"
+    Write-Host "Install scope:"
+    Write-Host "  1) Workspace -- .github\skills\              (this repo, recommended)"
+    Write-Host "  2) Global    -- $env:USERPROFILE\.config\copilot\skills\"
+    $cvscScope = Read-Host "Choice [1]"
+    if ([string]::IsNullOrEmpty($cvscScope)) { $cvscScope = "1" }
+
+    if ($cvscScope -eq "2") {
+        $dest = Join-Path $env:USERPROFILE ".config\copilot\skills\$skillName"
+    } else {
+        $dest = ".github\skills\$skillName"
+    }
+    Install-Skill $dest "SKILL-copilot.md"
+
+    if (Test-Path ".vscode\mcp.json") {
+        Write-OK ".vscode\mcp.json present -- MCP config already registered for VS Code"
+    } else {
+        Write-Warn ".vscode\mcp.json not found -- copy the template from the repo"
+    }
+
+    $installedAny = $true
+}
+
+if (-not $installedAny) {
+    Write-Warn "No platforms configured -- skill files were not installed"
+    Write-Warn "Re-run setup.ps1 to install skills, or copy them manually (see README)"
+}
+
+# ==============================================================================
+# PART 3 -- Next steps
+# ==============================================================================
+
+Write-Host ""
+Write-Head "=========================================="
 Write-OK "Setup complete!"
-Write-Host "==========================================" -ForegroundColor Cyan
+Write-Head "=========================================="
 Write-Host ""
-Write-Host "Next steps:"
+Write-Sep
+Write-Host "REQUIRED: activate the virtual environment"
+Write-Host "before starting any agent in this project:"
 Write-Host ""
-Write-Host "  1. Activate the virtual environment before starting your agent:"
-Write-Host '       .\.venv\Scripts\Activate.ps1'
+Write-Host '  .\.venv\Scripts\Activate.ps1'
 Write-Host ""
-Write-Host "  2. (Optional but recommended) set API keys as environment variables."
-Write-Host "     This is the preferred path; env vars override config.yaml:"
+Write-Sep
+Write-Host "API keys (all optional, improve rate limits)"
 Write-Host ""
-Write-Host '       $env:UNPAYWALL_EMAIL      = "you@example.com"'
-Write-Host '       $env:SEMANTIC_SCHOLAR_KEY = "..."'
-Write-Host '       $env:OPENALEX_API_KEY     = "..."'
+Write-Host "  Edit .env and fill in any of:"
+Write-Host "    UNPAYWALL_EMAIL=you@example.com"
+Write-Host "    SEMANTIC_SCHOLAR_KEY=your_key_here"
+Write-Host "    OPENALEX_API_KEY=your_key_here"
 Write-Host ""
-Write-Host "     To persist across sessions, use [Environment]::SetEnvironmentVariable"
-Write-Host "     or add them to your PowerShell `$PROFILE`."
-Write-Host "     IMPORTANT: never commit config.yaml with live keys."
+Write-Sep
+Write-Host "Verify the MCP server starts cleanly:"
 Write-Host ""
-Write-Host "  3. Start your agent. MCP servers are launched automatically:"
-Write-Host "       opencode                             # reads opencode.json"
-Write-Host "       claude                               # reads .mcp.json"
+Write-Host "  python mcp_server.py"
+Write-Host "  # Expected: startup message on stderr, then waits"
+Write-Host "  # Ctrl-C to exit"
 Write-Host ""
-Write-Host "  4. Verify the MCP server is reachable from inside your agent:"
-Write-Host "       /mcp                                 # Claude Code"
-Write-Host "       :mcp                                 # OpenCode"
+
+if ($doClaudeCode) {
+    Write-Sep
+    Write-Host "CLAUDE CODE"
+    Write-Host ""
+    Write-Host "  1. Start Claude Code in this directory."
+    Write-Host "  2. Run /mcp to confirm all servers are connected."
+    Write-Host "  3. Run /deep-research to invoke the skill."
+    Write-Host "  4. Authenticate alphaxiv (OAuth, first use only):"
+    Write-Host "       claude mcp auth alphaxiv"
+    Write-Host "     Or use /mcp inside a session."
+    Write-Host ""
+}
+
+if ($doOpenCode) {
+    Write-Sep
+    Write-Host "OPENCODE"
+    Write-Host ""
+    Write-Host "  1. Run: opencode"
+    Write-Host "  2. Run /mcp to confirm all servers are connected."
+    Write-Host "  3. Run /deep-research to invoke the skill."
+    Write-Host "  4. Authenticate alphaxiv (OAuth, first use only):"
+    Write-Host "       opencode mcp auth alphaxiv"
+    Write-Host ""
+}
+
+if ($doCopilotCLI) {
+    Write-Sep
+    Write-Host "COPILOT CLI"
+    Write-Host ""
+    Write-Host "  1. Run: copilot"
+    Write-Host "  2. Run /mcp show to confirm servers are registered."
+    Write-Host "  3. Run /skills list to confirm deep-research is visible."
+    Write-Host "  4. Invoke: /deep-research <your research question>"
+    Write-Host "  5. alphaxiv OAuth triggers automatically on first use."
+    Write-Host ""
+}
+
+if ($doCopilotVSCode) {
+    Write-Sep
+    Write-Host "COPILOT VS CODE"
+    Write-Host ""
+    Write-Host "  1. Open this folder in VS Code."
+    Write-Host "  2. Open Copilot Chat -> mode dropdown -> Agent."
+    Write-Host "  3. Click Start in .vscode\mcp.json to launch servers."
+    Write-Host "  4. Click the Auth CodeLens above the alphaxiv entry"
+    Write-Host "     in mcp.json to complete OAuth."
+    Write-Host "  5. Type: /deep-research <your research question>"
+    Write-Host ""
+}
+
+Write-Sep
+Write-Host "Full documentation: README.md"
 Write-Host ""
-Write-Host "  5. To deactivate the virtual environment:"
-Write-Host "       deactivate"
+Write-Host "To deactivate the virtual environment when done:"
+Write-Host "  deactivate"
 Write-Host ""
