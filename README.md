@@ -76,7 +76,7 @@ copilot                # Copilot CLI — reads .copilot/mcp-config.json
 
 # 4. Verify MCP servers are live
 /mcp                   # Claude Code
-:mcp                   # OpenCode
+/mcp                   # OpenCode
 /mcp show              # Copilot CLI
 # VS Code: Agent mode → tools icon → server list
 ```
@@ -315,7 +315,7 @@ cp SKILL-core.md     ~/.config/opencode/skills/deep-research/
 ```
 
 Use the **Plan** tab (Tab key) to review the plan before confirming.
-Switch to **Build** to begin gathering. Verify MCP: `:mcp`. Toggle
+Switch to **Build** to begin gathering. Verify MCP: `/mcp`. Toggle
 `/dcp` to prune context on long Extensive-length runs.
 
 ---
@@ -594,7 +594,7 @@ python mcp_server.py
 | Platform | Command |
 |---|---|
 | Claude Code | `/mcp` |
-| OpenCode | `:mcp` |
+| OpenCode | `/mcp` |
 | Copilot CLI | `/mcp show` |
 | VS Code Copilot | Agent mode → tools icon → server list |
 
