@@ -1,0 +1,28 @@
+# agents/openai.yaml
+# Codex-specific metadata for the deep-research skill.
+# Place this file at: <skill-dir>/agents/openai.yaml
+# (alongside SKILL.md and SKILL-core.md)
+#
+# References: https://developers.openai.com/codex/skills
+
+display_name: Deep Research
+description: >
+  Multi-source research pipeline: gathers from OpenAlex, Semantic Scholar,
+  Crossref/Unpaywall, Wikipedia, HackerNews, Reddit, and arXiv (via alphaxiv),
+  then deduplicates, ranks, and synthesises a fully-cited Markdown or LaTeX
+  report.
+
+# require explicit $deep-research invocation rather than auto-triggering
+# on every research-sounding prompt. Set to true to allow implicit activation.
+policy:
+  allow_implicit_invocation: false
+
+# Declare the MCP servers this skill depends on.
+# Codex uses this to warn the user if a required server is not configured.
+tool_dependencies:
+  mcp_servers:
+    - deep-research   # local stdio server (mcp_server.py)
+    - alphaxiv        # remote SSE — requires OAuth (codex mcp login alphaxiv)
+    - ddgs            # local stdio — web/news search fallback
+
+version: "1.0.0"

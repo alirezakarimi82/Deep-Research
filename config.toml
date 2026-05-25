@@ -1,0 +1,72 @@
+# Deep Research — Codex CLI MCP server configuration
+# Place at: .codex/config.toml  (project-scoped, trusted projects only)
+#         or ~/.codex/config.toml (global, all projects)
+#
+# Edit config directly or use the CLI:
+#   codex mcp add deep-research -- python /absolute/path/to/mcp_server.py
+#   codex mcp list
+#
+# After editing, restart Codex. Verify with /mcp inside a session.
+#
+# API keys for the deep-research server are read from the environment.
+# Set them in .env (loaded by config.py) or export before launching codex:
+#   export OPENALEX_API_KEY="..."
+#   export SEMANTIC_SCHOLAR_KEY="..."
+#   export UNPAYWALL_EMAIL="you@example.com"
+#
+# Approval mode for research tasks (edits files without confirmation):
+approval_mode = "auto-edit"
+
+# ---------------------------------------------------------------------------
+# deep-research  —  local stdio server (mcp_server.py)
+# ---------------------------------------------------------------------------
+[mcp_servers.deep-research]
+command = "python"
+args    = ["mcp_server.py"]
+
+# cwd is the absolute path to the deep-research repo.
+# ${workspaceFolder} works in project-scoped config; use an absolute path
+# in the global ~/.codex/config.toml.
+cwd = "${workspaceFolder}"
+
+startup_timeout_sec = 30
+tool_timeout_sec    = 60
+
+# Pass API keys to the server from the environment.
+# Values are read from the shell env (or .env via config.py) at launch.
+# Leave these empty here — populate them via .env or shell exports instead.
+[mcp_servers.deep-research.env]
+OPENALEX_API_KEY      = ""
+SEMANTIC_SCHOLAR_KEY  = ""
+UNPAYWALL_EMAIL       = ""
+
+# ---------------------------------------------------------------------------
+# alphaxiv  —  remote SSE server (OAuth required)
+# Authenticate once with:  codex mcp login alphaxiv
+# ---------------------------------------------------------------------------
+[mcp_servers.alphaxiv]
+url = "https://api.alphaxiv.org/mcp/v1"
+
+startup_timeout_sec = 15
+tool_timeout_sec    = 30
+
+# ---------------------------------------------------------------------------
+# ddgs  —  local stdio server (web/news search fallback)
+# ---------------------------------------------------------------------------
+[mcp_servers.ddgs]
+command = "ddgs"
+args    = ["mcp"]
+
+startup_timeout_sec = 10
+tool_timeout_sec    = 30
+
+# ---------------------------------------------------------------------------
+# playwright  —  local stdio server (last-resort JS-heavy page extraction)
+# Requires Node.js:  npx @playwright/mcp@latest --headless
+# ---------------------------------------------------------------------------
+[mcp_servers.playwright]
+command = "npx"
+args    = ["@playwright/mcp@latest", "--headless"]
+
+startup_timeout_sec = 30
+tool_timeout_sec    = 60

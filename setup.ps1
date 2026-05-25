@@ -160,15 +160,17 @@ Write-Host "  1) Claude Code"
 Write-Host "  2) OpenCode"
 Write-Host "  3) Copilot CLI"
 Write-Host "  4) Copilot VS Code"
-Write-Host "  5) All platforms"
-Write-Host "  6) Skip (manual setup later)"
+Write-Host "  5) Codex CLI"
+Write-Host "  6) All platforms"
+Write-Host "  7) Skip (manual setup later)"
 Write-Host ""
 $platformInput = Read-Host "Enter numbers separated by spaces (e.g. 1 2)"
 
-$doClaudeCode   = $platformInput -match "\b(1|5)\b"
-$doOpenCode     = $platformInput -match "\b(2|5)\b"
-$doCopilotCLI   = $platformInput -match "\b(3|5)\b"
-$doCopilotVSCode= $platformInput -match "\b(4|5)\b"
+$doClaudeCode   = $platformInput -match "\b(1|6)\b"
+$doOpenCode     = $platformInput -match "\b(2|6)\b"
+$doCopilotCLI   = $platformInput -match "\b(3|6)\b"
+$doCopilotVSCode= $platformInput -match "\b(4|6)\b"
+$doCodex        = $platformInput -match "\b(5|6)\b"
 
 $skillName  = "deep-research"
 $installedAny = $false
@@ -320,6 +322,51 @@ if ($doCopilotVSCode) {
     $installedAny = $true
 }
 
+# -- Codex CLI ----------------------------------------------------------------
+if ($doCodex) {
+    Write-Host ""
+    Write-Head "--- Codex CLI ---"
+    Write-Host "Install scope:"
+    Write-Host "  1) Personal -- $env:USERPROFILE\.codex\skills\   (all projects, recommended)"
+    Write-Host "  2) Project  -- .codex\skills\                       (this repo, trusted project required)"
+    $codexScope = Read-Host "Choice [1]"
+    if ([string]::IsNullOrEmpty($codexScope)) { $codexScope = "1" }
+
+    if ($codexScope -eq "2") {
+        $dest = ".codex\skills\$skillName"
+    } else {
+        $dest = Join-Path $env:USERPROFILE ".codex\skills\$skillName"
+    }
+
+    # Codex skills also need agents/openai.yaml alongside SKILL.md
+    New-Item -ItemType Directory -Path (Join-Path $dest "agents") -Force | Out-Null
+    Copy-Item "SKILL-codex.md"     (Join-Path $dest "SKILL.md") -Force
+    Copy-Item "SKILL-core.md"      (Join-Path $dest "SKILL-core.md") -Force
+    Copy-Item "agents\openai.yaml" (Join-Path $dest "agents\openai.yaml") -Force
+    Write-OK "Skill installed -> $dest\"
+
+    if ($codexScope -eq "2") {
+        if (-not (Test-Path ".codex\config.toml")) {
+            Write-Warn ".codex\config.toml not found -- copy it from the repo root"
+        } else {
+            Write-OK ".codex\config.toml present for project-scoped MCP"
+        }
+    } else {
+        $globalToml = Join-Path $env:USERPROFILE ".codex\config.toml"
+        if (-not (Test-Path $globalToml)) {
+            New-Item -ItemType Directory -Path (Split-Path $globalToml) -Force | Out-Null
+            $tomlContent = Get-Content ".codex\config.toml" -Raw
+            $tomlContent = $tomlContent -replace '\$\{workspaceFolder\}', $ScriptDir.Replace('', '\')
+            $tomlContent | Set-Content $globalToml -Encoding UTF8
+            Write-OK "Copied MCP config -> $globalToml (absolute path patched)"
+        } else {
+            Write-Warn "$globalToml already exists -- skipping (merge deep-research entry manually)"
+        }
+    }
+
+    $installedAny = $true
+}
+
 if (-not $installedAny) {
     Write-Warn "No platforms configured -- skill files were not installed"
     Write-Warn "Re-run setup.ps1 to install skills, or copy them manually (see README)"
@@ -403,6 +450,23 @@ if ($doCopilotVSCode) {
     Write-Host "  4. Click the Auth CodeLens above the alphaxiv entry"
     Write-Host "     in mcp.json to complete OAuth."
     Write-Host "  5. Type: /deep-research <your research question>"
+    Write-Host ""
+}
+
+if ($doCodex) {
+    Write-Sep
+    Write-Host "CODEX CLI"
+    Write-Host ""
+    Write-Host "  1. Ensure codex is installed:"
+    Write-Host "       npm install -g @github/codex"
+    Write-Host "       # or: winget install OpenAI.Codex"
+    Write-Host "  2. Run: codex"
+    Write-Host "  3. Run /mcp to confirm all servers are connected."
+    Write-Host "  4. Run /skills to browse; invoke with: `$deep-research"
+    Write-Host "  5. Authenticate alphaxiv (OAuth, first use only):"
+    Write-Host "       codex mcp login alphaxiv"
+    Write-Host "  6. Example:"
+    Write-Host "       `$deep-research research BESS arbitrage in CAISO"
     Write-Host ""
 }
 

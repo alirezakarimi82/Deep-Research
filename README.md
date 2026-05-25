@@ -23,7 +23,8 @@ User request → Plan → Gather (MCP tools) → Rank → Retrieve → Synthesis
 [Claude Code](#platform-setup--claude-code) ·
 [OpenCode](#platform-setup--opencode) ·
 [Copilot CLI](#platform-setup--copilot-cli) ·
-[Copilot VS Code](#platform-setup--copilot-in-vs-code)
+[Copilot VS Code](#platform-setup--copilot-in-vs-code) ·
+[Codex CLI](#platform-setup--codex-cli)
 
 **MCP & authentication**
 [Pipeline tools](#mcp-pipeline-tools) ·
@@ -42,16 +43,19 @@ User request → Plan → Gather (MCP tools) → Rank → Retrieve → Synthesis
 
 ## Platform compatibility
 
-| Feature | Claude Code | OpenCode | Copilot CLI | Copilot VS Code |
-|---|:---:|:---:|:---:|:---:|
-| Local stdio MCP servers | ✅ | ✅ | ✅ | ✅ |
-| Remote SSE MCP servers | ✅ | ✅ | ✅ | ✅ |
-| Skill files (SKILL.md) | ✅ | ✅ | ✅ | ✅ |
-| Structured `askUser` tool | ✅ | ✅ | prose only | prose only |
-| Native plan mode | ✅ | — | ✅ (Shift+Tab) | — |
-| Parallel subagents | ✅ (`Agent`) | ✅ (`Task`) | ✅ (`/fleet`) | limited |
-| Native task tracker | ✅ | ✅ | — | — |
-| `.tasks.md` fallback tracker | — | — | ✅ | ✅ |
+| Feature | Claude Code | OpenCode | Copilot CLI | Copilot VS Code | Codex CLI |
+|---|:---:|:---:|:---:|:---:|:---:|
+| Local stdio MCP servers | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Remote SSE MCP servers | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Skill files (SKILL.md) | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `agents/openai.yaml` metadata | — | — | — | — | ✅ |
+| AGENTS.md project context | ✅ | ✅ | — | — | ✅ |
+| MCP config format | JSON | JSON | JSON | JSON | **TOML** |
+| Structured `askUser` tool | ✅ | ✅ | prose only | prose only | prose only |
+| Native plan mode | ✅ | — | ✅ (Shift+Tab) | — | — |
+| Parallel subagents | ✅ (`Agent`) | ✅ (`Task`) | ✅ (`/fleet`) | limited | Agents SDK |
+| Native task tracker | ✅ | ✅ | — | — | — |
+| `.tasks.md` fallback tracker | — | — | ✅ | ✅ | ✅ |
 
 > **Copilot org prerequisite:** MCP is disabled by default for Copilot
 > Business and Enterprise plans. An org admin must enable it under
@@ -190,6 +194,22 @@ Or re-authenticate from inside a running session without restarting:
 
 ```
 /mcp
+```
+
+**Codex CLI**
+
+Codex CLI handles OAuth via the `codex mcp login` command. Run this once
+per machine after adding the alphaxiv server:
+
+```bash
+codex mcp login alphaxiv
+```
+
+A browser window opens for authorization. Tokens are stored in
+`~/.codex/` and refreshed automatically. Check status with:
+
+```bash
+codex mcp show alphaxiv
 ```
 
 **Copilot CLI**
@@ -623,6 +643,150 @@ chat, and waits for your explicit "yes" before gathering begins.
 MCP tools are only active in Agent mode. If tool calls are not
 executing, check the mode dropdown.
 
+
+---
+
+## Platform setup — Codex CLI
+
+### Installation
+
+Codex CLI is a standalone npm package. Node.js 18 or later is required.
+
+```bash
+# npm (all platforms)
+npm install -g @github/codex
+
+# macOS (Homebrew)
+brew install openai-codex
+
+# Windows (WinGet)
+winget install OpenAI.Codex
+```
+
+Authenticate on first launch:
+
+```bash
+codex
+/login      # browser flow; credentials stored in ~/.codex/
+```
+
+For headless or CI use, set an `OPENAI_API_KEY` environment variable
+and pass `--no-interactive`.
+
+### MCP configuration
+
+Codex uses **TOML** for MCP config — the only platform in this stack
+that doesn't use JSON. The shipped `.codex/config.toml` is ready for
+project-scoped use (trusted projects only). For global setup:
+
+```bash
+cp .codex/config.toml ~/.codex/config.toml
+# Edit the deep-research cwd to the absolute path of this directory
+```
+
+Or register servers interactively (recommended for first setup):
+
+```bash
+codex mcp add deep-research -- python /absolute/path/to/mcp_server.py
+codex mcp add ddgs -- ddgs mcp
+codex mcp add alphaxiv --url https://api.alphaxiv.org/mcp/v1
+```
+
+Config precedence (highest → lowest):
+1. `~/.codex/config.toml` (global)
+2. `.codex/config.toml` in a trusted project (project-scoped)
+
+Trust a project so project-scoped config is read:
+
+```bash
+codex trust         # in the project root
+```
+
+Verify all registered servers:
+
+```
+/mcp
+```
+
+> **TOML syntax notes:** arrays use `["val1", "val2"]`, strings always
+> need quotes, and section names use dot notation
+> `[mcp_servers.server-name]`. Use `codex mcp list` to validate after
+> editing — a silent config error means the server simply won't appear.
+
+### Skill installation
+
+Skills go in `~/.codex/skills/` (personal) or `.codex/skills/`
+(project, trusted projects only). Codex also reads `~/.agents/skills/`
+for cross-platform skill sharing.
+
+Unlike other platforms, Codex skills support an optional
+`agents/openai.yaml` alongside `SKILL.md` for UI metadata and
+invocation policy. This repo ships it at `agents/openai.yaml`.
+
+```bash
+# Personal (recommended)
+mkdir -p ~/.codex/skills/deep-research/agents
+cp SKILL-codex.md     ~/.codex/skills/deep-research/SKILL.md
+cp SKILL-core.md      ~/.codex/skills/deep-research/SKILL-core.md
+cp agents/openai.yaml ~/.codex/skills/deep-research/agents/openai.yaml
+
+# Project-scoped (trusted project required)
+mkdir -p .codex/skills/deep-research/agents
+cp SKILL-codex.md     .codex/skills/deep-research/SKILL.md
+cp SKILL-core.md      .codex/skills/deep-research/SKILL-core.md
+cp agents/openai.yaml .codex/skills/deep-research/agents/openai.yaml
+```
+
+Restart Codex after installing. Verify with `/skills`.
+
+> **Shared install tip:** because Codex also reads `~/.agents/skills/`,
+> a single install there is discovered by Codex, Claude Code, OpenCode,
+> and any other SKILL.md-compatible agent — the right overlay for each
+> platform just needs to be installed in that platform's own directory.
+
+### AGENTS.md (optional but recommended)
+
+`AGENTS.md` gives Codex always-on project context without consuming
+skill slot budget. Add one to the repo root with facts a new contributor
+needs on day one:
+
+```markdown
+# DeepResearch project
+
+- Python 3.10+, virtual environment at `.venv/`
+- Activate: `source .venv/bin/activate`
+- Run tests: `pytest tests/`
+- MCP server: `python mcp_server.py` (stdio, must not write to stdout)
+- API keys: set in `.env` or as shell env vars (see `.env.example`)
+- Reports output to `reports/`
+```
+
+This is separate from the deep-research skill — AGENTS.md is for
+coding tasks (tests, debugging, refactoring); the skill is for research
+tasks.
+
+### Usage
+
+```bash
+codex
+
+# Explicit invocation (required — see agents/openai.yaml)
+$deep-research  research BESS degradation and bidding strategies in CAISO
+
+# Or reference the skill by description
+use the deep-research skill to write a report on solid electrolyte
+interphase formation mechanisms
+```
+
+Select the skill from the `/skills` browser if auto-detection doesn't
+trigger. The skill presents the plan in chat and waits for "yes" before
+gathering begins.
+
+**Approval mode for research tasks:** research writes many intermediate
+files. Set `approval_mode = "auto-edit"` in `config.toml` (already set
+in the shipped config) so Codex edits notes and drafts without
+per-file confirmation. Review the final report before accepting.
+
 ---
 
 ## Skill architecture
@@ -633,9 +797,13 @@ executing, check the mode dropdown.
 | `SKILL-claude-code.md` | Claude Code overlay — verb → tool mapping, plan-mode flow, `AskUserQuestion` schema, `Agent` subagents. |
 | `SKILL-opencode.md` | OpenCode overlay — verb → tool mapping, write-plan-then-confirm flow, `question` schema, `Task` subagents. |
 | `SKILL-copilot.md` | Copilot overlay covering both CLI and VS Code — verb → tool mapping, prose-question flow, `/fleet` and `.agent.md` subagents, `.tasks.md` tracker. |
+| `SKILL-codex.md` | Codex CLI overlay — verb → tool mapping, prose-question flow, Agents SDK subagents, `.tasks.md` tracker, `agents/openai.yaml` invocation policy. |
 
 Each overlay's first instruction is to read `SKILL-core.md` from the
 same directory. Both files **must** be installed together.
+
+For Codex CLI, the skill directory must also contain
+`agents/openai.yaml` (shipped in `agents/openai.yaml` at the repo root).
 
 ---
 
@@ -694,6 +862,7 @@ python mcp_server.py
 | OpenCode | `/mcp` |
 | Copilot CLI | `/mcp show` |
 | VS Code Copilot | Agent mode → tools icon → server list |
+| Codex CLI | `/mcp` (also `/skills` for skill list) |
 
 ---
 
@@ -795,6 +964,10 @@ deep-research/
 │   └── mcp-config.json         Copilot CLI MCP config (project-scoped)
 ├── .vscode/
 │   └── mcp.json                VS Code Copilot MCP config (workspace-scoped)
+├── .codex/
+│   └── config.toml             Codex CLI MCP config in TOML (project-scoped, trusted projects)
+├── agents/
+│   └── openai.yaml             Codex skill metadata and invocation policy
 │
 ├── sources/
 │   ├── academic/

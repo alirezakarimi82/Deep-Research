@@ -5,7 +5,7 @@
 > tool verbs** (`askUser`, `readFile`, `writeFile`, `editFile`, `runShell`,
 > `webFetch`, `webSearch`, `taskTracker`, `spawnSubagent`, `planMode`).
 >
-> Host-specific overlays (`SKILL-claude-code.md`, `SKILL-opencode.md`, and `SKILL-copilot.md`)
+> Host-specific overlays (`SKILL-claude-code.md`, `SKILL-opencode.md`, `SKILL-copilot.md`, and `SKILL-codex.md`)
 > translate each verb into the real tool name on that platform and add
 > small platform-specific flow tweaks. Always read the overlay for your
 > host **first**; it tells you how to read this file and which of the

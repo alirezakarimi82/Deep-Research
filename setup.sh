@@ -134,8 +134,9 @@ echo "  1) Claude Code"
 echo "  2) OpenCode"
 echo "  3) Copilot CLI"
 echo "  4) Copilot VS Code"
-echo "  5) All platforms"
-echo "  6) Skip (manual setup later)"
+echo "  5) Codex CLI"
+echo "  6) All platforms"
+echo "  7) Skip (manual setup later)"
 echo ""
 printf "Enter numbers separated by spaces (e.g. 1 2): "
 read -r PLATFORM_INPUT
@@ -143,13 +144,16 @@ read -r PLATFORM_INPUT
 # Parse selections
 DO_CLAUDE=false; DO_OPENCODE=false; DO_COPILOT_CLI=false; DO_COPILOT_VSCODE=false
 
-if echo "$PLATFORM_INPUT" | grep -qw "5"; then
-    DO_CLAUDE=true; DO_OPENCODE=true; DO_COPILOT_CLI=true; DO_COPILOT_VSCODE=true
+DO_CODEX=false
+
+if echo "$PLATFORM_INPUT" | grep -qw "6"; then
+    DO_CLAUDE=true; DO_OPENCODE=true; DO_COPILOT_CLI=true; DO_COPILOT_VSCODE=true; DO_CODEX=true
 else
-    echo "$PLATFORM_INPUT" | grep -qw "1" && DO_CLAUDE=true      || true
-    echo "$PLATFORM_INPUT" | grep -qw "2" && DO_OPENCODE=true     || true
-    echo "$PLATFORM_INPUT" | grep -qw "3" && DO_COPILOT_CLI=true  || true
-    echo "$PLATFORM_INPUT" | grep -qw "4" && DO_COPILOT_VSCODE=true || true
+    echo "$PLATFORM_INPUT" | grep -qw "1" && DO_CLAUDE=true         || true
+    echo "$PLATFORM_INPUT" | grep -qw "2" && DO_OPENCODE=true        || true
+    echo "$PLATFORM_INPUT" | grep -qw "3" && DO_COPILOT_CLI=true     || true
+    echo "$PLATFORM_INPUT" | grep -qw "4" && DO_COPILOT_VSCODE=true  || true
+    echo "$PLATFORM_INPUT" | grep -qw "5" && DO_CODEX=true           || true
 fi
 
 SKILL_NAME="deep-research"
@@ -310,6 +314,52 @@ if [ "$DO_COPILOT_VSCODE" = true ]; then
     INSTALLED_ANY=true
 fi
 
+# -- Codex CLI ----------------------------------------------------------------
+if [ "$DO_CODEX" = true ]; then
+    echo ""
+    head_ "--- Codex CLI ---"
+    echo "Install scope:"
+    echo "  1) Personal -- ~/.codex/skills/    (all projects, recommended)"
+    echo "  2) Project  -- .codex/skills/       (this repo, trusted project required)"
+    printf "Choice [1]: "
+    read -r CODEX_SCOPE
+    CODEX_SCOPE="${CODEX_SCOPE:-1}"
+
+    if [ "$CODEX_SCOPE" = "2" ]; then
+        DEST=".codex/skills/$SKILL_NAME"
+    else
+        DEST="$HOME/.codex/skills/$SKILL_NAME"
+    fi
+    # Codex skills also need the agents/openai.yaml alongside SKILL.md
+    mkdir -p "$DEST/agents"
+    cp "SKILL-codex.md"     "$DEST/SKILL.md"
+    cp "SKILL-core.md"      "$DEST/SKILL-core.md"
+    cp "agents/openai.yaml" "$DEST/agents/openai.yaml"
+    info "Skill installed → $DEST/"
+
+    # MCP config
+    if [ "$CODEX_SCOPE" = "2" ]; then
+        # Project-scoped: .codex/config.toml already in repo
+        mkdir -p ".codex"
+        if [ ! -f ".codex/config.toml" ]; then
+            cp ".codex/config.toml" ".codex/config.toml" 2>/dev/null ||                 cp /mnt/user-data/outputs/.codex/config.toml ".codex/config.toml"
+            info "Created .codex/config.toml for project-scoped MCP"
+        else
+            info ".codex/config.toml already exists — skipping"
+        fi
+    else
+        mkdir -p "$HOME/.codex"
+        if [ ! -f "$HOME/.codex/config.toml" ]; then
+            sed "s|\${workspaceFolder}|$SCRIPT_DIR|g"                 ".codex/config.toml" > "$HOME/.codex/config.toml"
+            info "Copied MCP config → ~/.codex/config.toml (absolute path patched)"
+        else
+            warn "~/.codex/config.toml already exists — skipping (merge deep-research entry manually)"
+        fi
+    fi
+
+    INSTALLED_ANY=true
+fi
+
 if [ "$INSTALLED_ANY" = false ]; then
     warn "No platforms configured — skill files were not installed"
     warn "Re-run setup.sh to install skills, or copy them manually (see README)"
@@ -393,6 +443,22 @@ if [ "$DO_COPILOT_VSCODE" = true ]; then
     echo "  4. Click the Auth CodeLens above the alphaxiv entry"
     echo "     in mcp.json to complete OAuth."
     echo "  5. Type: /deep-research <your research question>"
+    echo ""
+fi
+
+if [ "$DO_CODEX" = true ]; then
+    echo "───────────────────────────────────────────"
+    echo "CODEX CLI"
+    echo ""
+    echo "  1. Ensure codex is installed: npm install -g @github/codex"
+    echo "     (or: brew install openai-codex)"
+    echo "  2. Run: codex"
+    echo "  3. Run /mcp to confirm all servers are connected."
+    echo "  4. Run /skills to browse skills; invoke with: \$deep-research"
+    echo "  5. Authenticate alphaxiv (OAuth, first use only):"
+    echo "       codex mcp login alphaxiv"
+    echo "  6. Example usage:"
+    echo "       \$deep-research research BESS arbitrage strategies in CAISO"
     echo ""
 fi
 
