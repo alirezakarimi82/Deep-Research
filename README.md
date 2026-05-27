@@ -21,10 +21,10 @@ User request → Plan → Gather (MCP tools) → Rank → Retrieve → Synthesis
 
 **Platform guides**
 [Claude Code](#platform-setup--claude-code) ·
+[Codex CLI](#platform-setup--codex-cli) ·
 [OpenCode](#platform-setup--opencode) ·
 [Copilot CLI](#platform-setup--copilot-cli) ·
-[Copilot VS Code](#platform-setup--copilot-in-vs-code) ·
-[Codex CLI](#platform-setup--codex-cli)
+[Copilot VS Code](#platform-setup--copilot-in-vs-code)
 
 **MCP & authentication**
 [Pipeline tools](#mcp-pipeline-tools) ·
@@ -77,13 +77,15 @@ export SEMANTIC_SCHOLAR_KEY="..."    # optional
 export OPENALEX_API_KEY="..."        # optional
 
 # 3. Start your agent
-opencode               # OpenCode    — reads opencode.json
 claude                 # Claude Code — reads .mcp.json / .claude/mcp.json
+codex                  # Codex CLI   — reads .codex/config.toml
+opencode               # OpenCode    — reads opencode.json
 copilot                # Copilot CLI — reads .copilot/mcp-config.json
 # VS Code: open workspace, Copilot Chat → mode dropdown → Agent
 
 # 4. Verify MCP servers are live
 /mcp                   # Claude Code
+/mcp                   # Codex CLI   (also: /skills for skill list)
 /mcp                   # OpenCode
 /mcp show              # Copilot CLI
 # VS Code: Agent mode → tools icon → server list
@@ -94,7 +96,7 @@ copilot                # Copilot CLI — reads .copilot/mcp-config.json
 ## MCP pipeline tools
 
 These tools are exposed by `mcp_server.py` and are identical on all
-four platforms.
+five platforms.
 
 | Tool | Signature | Notes |
 |---|---|---|
@@ -389,6 +391,353 @@ gathering. Verify MCP servers: `/mcp`.
 
 ---
 
+## Platform setup — Codex CLI
+
+### Installation
+
+Codex CLI is a standalone npm package. Node.js 18 or later is required.
+
+```bash
+# npm (all platforms)
+npm install -g @github/codex
+
+# macOS (Homebrew)
+brew install openai-codex
+
+# Windows (WinGet)
+winget install OpenAI.Codex
+```
+
+Authenticate on first launch:
+
+```bash
+codex
+/login      # browser flow; credentials stored in ~/.codex/
+```
+
+For headless or CI use, set an `OPENAI_API_KEY` environment variable
+and pass `--no-interactive`.
+
+### MCP configuration
+
+Codex uses **TOML** for MCP config — the only platform in this stack
+that doesn't use JSON. The shipped `.codex/config.toml` is ready for
+project-scoped use (trusted projects only). For global setup:
+
+```bash
+cp .codex/config.toml ~/.codex/config.toml
+# Edit the deep-research cwd to the absolute path of this directory
+```
+
+Or register servers interactively (recommended for first setup):
+
+```bash
+codex mcp add deep-research -- python /absolute/path/to/mcp_server.py
+codex mcp add ddgs -- ddgs mcp
+codex mcp add alphaxiv --url https://api.alphaxiv.org/mcp/v1
+```
+
+Config precedence (highest → lowest):
+1. `~/.codex/config.toml` (global)
+2. `.codex/config.toml` in a trusted project (project-scoped)
+
+Trust a project so project-scoped config is read:
+
+```bash
+codex trust         # in the project root
+```
+
+Verify all registered servers:
+
+```
+/mcp
+```
+
+> **TOML syntax notes:** arrays use `["val1", "val2"]`, strings always
+> need quotes, and section names use dot notation
+> `[mcp_servers.server-name]`. Use `codex mcp list` to validate after
+> editing — a silent config error means the server simply won't appear.
+
+### Skill installation
+
+Skills go in `~/.codex/skills/` (personal) or `.codex/skills/`
+(project, trusted projects only). Codex also reads `~/.agents/skills/`
+for cross-platform skill sharing.
+
+Unlike other platforms, Codex skills support an optional
+`agents/openai.yaml` alongside `SKILL.md` for UI metadata and
+invocation policy. This repo ships it at `agents/openai.yaml`.
+
+```bash
+# Personal (recommended)
+mkdir -p ~/.codex/skills/deep-research/agents
+cp SKILL-codex.md     ~/.codex/skills/deep-research/SKILL.md
+cp SKILL-core.md      ~/.codex/skills/deep-research/SKILL-core.md
+cp agents/openai.yaml ~/.codex/skills/deep-research/agents/openai.yaml
+
+# Project-scoped (trusted project required)
+mkdir -p .codex/skills/deep-research/agents
+cp SKILL-codex.md     .codex/skills/deep-research/SKILL.md
+cp SKILL-core.md      .codex/skills/deep-research/SKILL-core.md
+cp agents/openai.yaml .codex/skills/deep-research/agents/openai.yaml
+```
+
+Restart Codex after installing. Verify with `/skills`.
+
+> **Shared install tip:** because Codex also reads `~/.agents/skills/`,
+> a single install there is discovered by Codex, Claude Code, OpenCode,
+> and any other SKILL.md-compatible agent — the right overlay for each
+> platform just needs to be installed in that platform's own directory.
+
+### AGENTS.md (optional but recommended)
+
+`AGENTS.md` gives Codex always-on project context without consuming
+skill slot budget. Add one to the repo root with facts a new contributor
+needs on day one:
+
+```markdown
+# DeepResearch project
+
+- Python 3.10+, virtual environment at `.venv/`
+- Activate: `source .venv/bin/activate`
+- Run tests: `pytest tests/`
+- MCP server: `python mcp_server.py` (stdio, must not write to stdout)
+- API keys: set in `.env` or as shell env vars (see `.env.example`)
+- Reports output to `reports/`
+```
+
+This is separate from the deep-research skill — AGENTS.md is for
+coding tasks (tests, debugging, refactoring); the skill is for research
+tasks.
+
+### Usage
+
+```bash
+codex
+
+# Explicit invocation (required — see agents/openai.yaml)
+$deep-research  research BESS degradation and bidding strategies in CAISO
+
+# Or reference the skill by description
+use the deep-research skill to write a report on solid electrolyte
+interphase formation mechanisms
+```
+
+Select the skill from the `/skills` browser if auto-detection doesn't
+trigger. The skill presents the plan in chat and waits for "yes" before
+gathering begins.
+
+**Approval mode for research tasks:** research writes many intermediate
+files. Set `approval_mode = "auto-edit"` in `config.toml` (already set
+in the shipped config) so Codex edits notes and drafts without
+per-file confirmation. Review the final report before accepting.
+
+---
+
+## Skill architecture
+
+| File | Purpose |
+|---|---|
+| `SKILL-core.md` | Shared platform-agnostic playbook — integrity commandments, full MCP tool reference, source quality tiers, workflow Steps 0–7, source note format, LaTeX conventions. Uses abstract verbs only. |
+| `SKILL-claude-code.md` | Claude Code overlay — verb → tool mapping, plan-mode flow, `AskUserQuestion` schema, `Agent` subagents. |
+| `SKILL-opencode.md` | OpenCode overlay — verb → tool mapping, write-plan-then-confirm flow, `question` schema, `Task` subagents. |
+| `SKILL-copilot.md` | Copilot overlay covering both CLI and VS Code — verb → tool mapping, prose-question flow, `/fleet` and `.agent.md` subagents, `.tasks.md` tracker. |
+| `SKILL-codex.md` | Codex CLI overlay — verb → tool mapping, prose-question flow, Agents SDK subagents, `.tasks.md` tracker, `agents/openai.yaml` invocation policy. |
+
+Each overlay's first instruction is to read `SKILL-core.md` from the
+same directory. Both files **must** be installed together.
+
+For Codex CLI, the skill directory must also contain
+`agents/openai.yaml` (shipped in `agents/openai.yaml` at the repo root).
+
+---
+
+## Workflow summary
+
+Full playbook in `SKILL-core.md`. In brief:
+
+1. **Confirm** — format, length, depth mode, source count, source types
+2. **Plan** — sub-questions with per-question queries, acceptance criteria, slug
+3. **Gather** — parallel MCP calls per sub-question; up to 3 rounds
+4. **Rank** — merge all results → `rank_and_filter` → deduplicated, scored, balanced corpus
+5. **Read** — snippet scan; targeted full-text fetch for unanswered questions (Full mode only)
+6. **Write** — incremental section-by-section draft from source notes
+7. **Review** — citation coverage → URL verification → adversarial coherence
+8. **Deliver** — final report + provenance sidecar; offer expansion options
+
+---
+
+## Tests
+
+```bash
+pytest tests/
+```
+
+29 pure-logic unit tests for the ranker: full-text gate, DOI dedup with
+field merge, fuzzy title dedup, temporal bucketing, year extraction edge
+cases, `top_n` boundary conditions, and end-to-end ranking on a mixed
+multi-source corpus. Run automatically by the setup scripts when pytest
+is available.
+
+---
+
+## Verifying the install
+
+**1. Import smoke test:**
+
+```bash
+python -c "import sys; sys.path.insert(0,'.'); import mcp_server" >/dev/null
+# Any stdout output = broken (corrupts the MCP JSON-RPC protocol)
+```
+
+**2. Live server check:**
+
+```bash
+python mcp_server.py
+# Expected stderr:
+# [INFO] deep_research: deep-research MCP starting (openalex=on, ss=off, ...)
+# Server waits on stdin. Ctrl-C to exit.
+```
+
+**3. In-agent check:**
+
+| Platform | Command |
+|---|---|
+| Claude Code | `/mcp` |
+| Codex CLI | `/mcp` (also `/skills` for skill list) |
+| OpenCode | `/mcp` |
+| Copilot CLI | `/mcp show` |
+| VS Code Copilot | Agent mode → tools icon → server list |
+
+---
+
+## Troubleshooting
+
+**MCP tools not appearing**
+
+- Confirm `python mcp_server.py` starts with nothing on stdout.
+- Claude Code / OpenCode: verify the `cwd` or server path is absolute
+  and correct.
+- Copilot CLI: run `/mcp show`. Check the `deep-research` entry points
+  to the right directory.
+- VS Code: MCP tools are **only visible in Agent mode**. Check the mode
+  dropdown. Click the **Start** button in `mcp.json` if servers haven't
+  launched. If servers share a name with another configured server, VS
+  Code will disable the less-specific one — check for name collisions
+  under Extensions → `@mcp @installed`.
+- All platforms: restart the agent after any MCP config change.
+
+**`rank_and_filter` returns fewer sources than expected**
+
+The full-text gate dropped abstract-only entries. Check stderr for
+`Dropped N abstract-only / inaccessible sources`. To widen the pool:
+add `from_year` to `search_crossref`, or lower `dedup_threshold` in
+`config.yaml`.
+
+**Unpaywall enrichment is slow**
+
+The 8-worker concurrent enrichment is already active. Reduce
+`max_results` in `search_crossref` or add `from_year` to shrink the
+batch.
+
+**`parse_pdf` returns empty string**
+
+The PDF exceeded the 50 MB cap, or contains only scanned images without
+OCR text. Note the URL as inaccessible in the source note and continue.
+
+**`alphaxiv` tools fail with a connection or auth error**
+
+Two possible causes:
+
+- **Not authenticated:** alphaxiv requires OAuth 2.0 before any tools work.
+  See the [alphaxiv authentication](#alphaxiv-authentication) section for
+  per-platform steps. Tokens expire — re-run the auth command if you see 401 errors.
+- **Server unreachable:** `api.alphaxiv.org` is temporarily down.
+  Skip all three alphaxiv tools for this session and proceed with
+  `search_openalex`, `search_semantic_scholar`, and `search_crossref`.
+
+**LaTeX compilation fails**
+
+Ensure `pdflatex` and `bibtex` are installed. The compile script must
+run three pdflatex passes plus one bibtex pass — a single pass leaves
+references unresolved. Check that every `\cite{key}` has a matching
+`.bib` entry.
+
+**Smoke test fails (stdout not clean)**
+
+Isolate the offending call:
+
+```bash
+python -c "
+import sys, io
+buf = io.StringIO()
+sys.stdout = buf
+sys.path.insert(0, '.')
+import mcp_server
+sys.stdout = sys.__stdout__
+print('Captured:', repr(buf.getvalue()))
+"
+```
+
+Redirect any stray `print()` to `utils.log.info(...)`.
+
+---
+
+## File structure
+
+```
+deep-research/
+│
+├── mcp_server.py               MCP server — exposes pipeline as stdio tools
+├── config.py                   Config loader (env var → .env → yaml → defaults)
+├── config.yaml                 Local config — gitignored, never commit with live keys
+├── config.example.yaml         YAML template — copy to config.yaml to start
+├── .env.example                Secrets template — copy to .env and fill in values
+├── utils.py                    Stderr logger + retryable_get
+├── requirements.txt            Python dependencies
+├── setup.sh                    Unix/macOS setup script
+├── setup.ps1                   Windows PowerShell setup script
+├── README.md                   This file
+│
+├── SKILL-core.md               Shared platform-agnostic skill playbook
+├── SKILL-claude-code.md        Overlay for Claude Code
+├── SKILL-opencode.md           Overlay for OpenCode
+├── SKILL-copilot.md            Overlay for Copilot CLI + Copilot VS Code
+│
+├── opencode.json               OpenCode MCP config (project-scoped)
+├── .copilot/
+│   └── mcp-config.json         Copilot CLI MCP config (project-scoped)
+├── .vscode/
+│   └── mcp.json                VS Code Copilot MCP config (workspace-scoped)
+├── .codex/
+│   └── config.toml             Codex CLI MCP config in TOML (project-scoped, trusted projects)
+├── agents/
+│   └── openai.yaml             Codex skill metadata and invocation policy
+│
+├── sources/
+│   ├── academic/
+│   │   ├── openalex.py         Two-pass OA search; PDF gate on both passes
+│   │   ├── semantic_scholar.py Citation graph, TLDR, single-call ref expansion
+│   │   └── crossref_unpaywall.py DOI metadata + concurrent Unpaywall enrichment
+│   └── web/
+│       ├── wikipedia.py        REST summary API; real lead extracts
+│       └── reddit_hn.py        HN (Algolia) + Reddit; graceful 403 degradation
+│
+├── retrieval/
+│   ├── content_extractor.py    Jina → trafilatura → BS4; debug logging on failure
+│   ├── jina_reader.py          URL → clean Markdown via r.jina.ai
+│   └── pdf_parser.py           Streamed download (50 MB cap) + dual backend
+│
+├── analysis/
+│   └── ranker.py               Full-text gate, DOI+fuzzy dedup with field merge,
+│                               relevance scoring, temporal bucket balance
+│
+└── tests/
+    └── test_ranker.py          29 pure-logic ranker unit tests
+```
+
+---
+
 ## Platform setup — OpenCode
 
 ### MCP configuration
@@ -646,149 +995,6 @@ executing, check the mode dropdown.
 
 ---
 
-## Platform setup — Codex CLI
-
-### Installation
-
-Codex CLI is a standalone npm package. Node.js 18 or later is required.
-
-```bash
-# npm (all platforms)
-npm install -g @github/codex
-
-# macOS (Homebrew)
-brew install openai-codex
-
-# Windows (WinGet)
-winget install OpenAI.Codex
-```
-
-Authenticate on first launch:
-
-```bash
-codex
-/login      # browser flow; credentials stored in ~/.codex/
-```
-
-For headless or CI use, set an `OPENAI_API_KEY` environment variable
-and pass `--no-interactive`.
-
-### MCP configuration
-
-Codex uses **TOML** for MCP config — the only platform in this stack
-that doesn't use JSON. The shipped `.codex/config.toml` is ready for
-project-scoped use (trusted projects only). For global setup:
-
-```bash
-cp .codex/config.toml ~/.codex/config.toml
-# Edit the deep-research cwd to the absolute path of this directory
-```
-
-Or register servers interactively (recommended for first setup):
-
-```bash
-codex mcp add deep-research -- python /absolute/path/to/mcp_server.py
-codex mcp add ddgs -- ddgs mcp
-codex mcp add alphaxiv --url https://api.alphaxiv.org/mcp/v1
-```
-
-Config precedence (highest → lowest):
-1. `~/.codex/config.toml` (global)
-2. `.codex/config.toml` in a trusted project (project-scoped)
-
-Trust a project so project-scoped config is read:
-
-```bash
-codex trust         # in the project root
-```
-
-Verify all registered servers:
-
-```
-/mcp
-```
-
-> **TOML syntax notes:** arrays use `["val1", "val2"]`, strings always
-> need quotes, and section names use dot notation
-> `[mcp_servers.server-name]`. Use `codex mcp list` to validate after
-> editing — a silent config error means the server simply won't appear.
-
-### Skill installation
-
-Skills go in `~/.codex/skills/` (personal) or `.codex/skills/`
-(project, trusted projects only). Codex also reads `~/.agents/skills/`
-for cross-platform skill sharing.
-
-Unlike other platforms, Codex skills support an optional
-`agents/openai.yaml` alongside `SKILL.md` for UI metadata and
-invocation policy. This repo ships it at `agents/openai.yaml`.
-
-```bash
-# Personal (recommended)
-mkdir -p ~/.codex/skills/deep-research/agents
-cp SKILL-codex.md     ~/.codex/skills/deep-research/SKILL.md
-cp SKILL-core.md      ~/.codex/skills/deep-research/SKILL-core.md
-cp agents/openai.yaml ~/.codex/skills/deep-research/agents/openai.yaml
-
-# Project-scoped (trusted project required)
-mkdir -p .codex/skills/deep-research/agents
-cp SKILL-codex.md     .codex/skills/deep-research/SKILL.md
-cp SKILL-core.md      .codex/skills/deep-research/SKILL-core.md
-cp agents/openai.yaml .codex/skills/deep-research/agents/openai.yaml
-```
-
-Restart Codex after installing. Verify with `/skills`.
-
-> **Shared install tip:** because Codex also reads `~/.agents/skills/`,
-> a single install there is discovered by Codex, Claude Code, OpenCode,
-> and any other SKILL.md-compatible agent — the right overlay for each
-> platform just needs to be installed in that platform's own directory.
-
-### AGENTS.md (optional but recommended)
-
-`AGENTS.md` gives Codex always-on project context without consuming
-skill slot budget. Add one to the repo root with facts a new contributor
-needs on day one:
-
-```markdown
-# DeepResearch project
-
-- Python 3.10+, virtual environment at `.venv/`
-- Activate: `source .venv/bin/activate`
-- Run tests: `pytest tests/`
-- MCP server: `python mcp_server.py` (stdio, must not write to stdout)
-- API keys: set in `.env` or as shell env vars (see `.env.example`)
-- Reports output to `reports/`
-```
-
-This is separate from the deep-research skill — AGENTS.md is for
-coding tasks (tests, debugging, refactoring); the skill is for research
-tasks.
-
-### Usage
-
-```bash
-codex
-
-# Explicit invocation (required — see agents/openai.yaml)
-$deep-research  research BESS degradation and bidding strategies in CAISO
-
-# Or reference the skill by description
-use the deep-research skill to write a report on solid electrolyte
-interphase formation mechanisms
-```
-
-Select the skill from the `/skills` browser if auto-detection doesn't
-trigger. The skill presents the plan in chat and waits for "yes" before
-gathering begins.
-
-**Approval mode for research tasks:** research writes many intermediate
-files. Set `approval_mode = "auto-edit"` in `config.toml` (already set
-in the shipped config) so Codex edits notes and drafts without
-per-file confirmation. Review the final report before accepting.
-
----
-
 ## Skill architecture
 
 | File | Purpose |
@@ -859,10 +1065,10 @@ python mcp_server.py
 | Platform | Command |
 |---|---|
 | Claude Code | `/mcp` |
+| Codex CLI | `/mcp` (also `/skills` for skill list) |
 | OpenCode | `/mcp` |
 | Copilot CLI | `/mcp show` |
 | VS Code Copilot | Agent mode → tools icon → server list |
-| Codex CLI | `/mcp` (also `/skills` for skill list) |
 
 ---
 

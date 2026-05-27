@@ -12,7 +12,7 @@ GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; CYAN='\033[0;36m'; NC
 info()  { echo -e "${GREEN}[ok]${NC}  $*"; }
 warn()  { echo -e "${YELLOW}[!]${NC}  $*"; }
 error() { echo -e "${RED}[x]${NC}  $*" >&2; }
-head_()  { echo -e "${CYAN}$*${NC}"; }
+head_() { echo -e "${CYAN}$*${NC}"; }
 
 echo ""
 head_ "==========================================="
@@ -86,7 +86,6 @@ HAVE_KEYS=false
 for v in SEMANTIC_SCHOLAR_KEY OPENALEX_API_KEY UNPAYWALL_EMAIL; do
     if [ -n "${!v:-}" ]; then HAVE_KEYS=true; break; fi
 done
-# Also check .env file
 if [ "$HAVE_KEYS" = false ] && [ -f ".env" ]; then
     if grep -qE '^(SEMANTIC_SCHOLAR_KEY|OPENALEX_API_KEY|UNPAYWALL_EMAIL)=.+' .env 2>/dev/null; then
         HAVE_KEYS=true
@@ -131,42 +130,41 @@ echo ""
 echo "Which agent platform(s) do you want to configure?"
 echo ""
 echo "  1) Claude Code"
-echo "  2) OpenCode"
-echo "  3) Copilot CLI"
-echo "  4) Copilot VS Code"
-echo "  5) Codex CLI"
+echo "  2) Codex CLI"
+echo "  3) OpenCode"
+echo "  4) Copilot CLI"
+echo "  5) Copilot VS Code"
 echo "  6) All platforms"
 echo "  7) Skip (manual setup later)"
 echo ""
 printf "Enter numbers separated by spaces (e.g. 1 2): "
 read -r PLATFORM_INPUT
 
-# Parse selections
-DO_CLAUDE=false; DO_OPENCODE=false; DO_COPILOT_CLI=false; DO_COPILOT_VSCODE=false
-
-DO_CODEX=false
+# Parse selections — "6" means all
+DO_CLAUDE=false; DO_CODEX=false; DO_OPENCODE=false
+DO_COPILOT_CLI=false; DO_COPILOT_VSCODE=false
 
 if echo "$PLATFORM_INPUT" | grep -qw "6"; then
-    DO_CLAUDE=true; DO_OPENCODE=true; DO_COPILOT_CLI=true; DO_COPILOT_VSCODE=true; DO_CODEX=true
+    DO_CLAUDE=true; DO_CODEX=true; DO_OPENCODE=true
+    DO_COPILOT_CLI=true; DO_COPILOT_VSCODE=true
 else
-    echo "$PLATFORM_INPUT" | grep -qw "1" && DO_CLAUDE=true         || true
-    echo "$PLATFORM_INPUT" | grep -qw "2" && DO_OPENCODE=true        || true
-    echo "$PLATFORM_INPUT" | grep -qw "3" && DO_COPILOT_CLI=true     || true
-    echo "$PLATFORM_INPUT" | grep -qw "4" && DO_COPILOT_VSCODE=true  || true
-    echo "$PLATFORM_INPUT" | grep -qw "5" && DO_CODEX=true           || true
+    echo "$PLATFORM_INPUT" | grep -qw "1" && DO_CLAUDE=true        || true
+    echo "$PLATFORM_INPUT" | grep -qw "2" && DO_CODEX=true         || true
+    echo "$PLATFORM_INPUT" | grep -qw "3" && DO_OPENCODE=true      || true
+    echo "$PLATFORM_INPUT" | grep -qw "4" && DO_COPILOT_CLI=true   || true
+    echo "$PLATFORM_INPUT" | grep -qw "5" && DO_COPILOT_VSCODE=true || true
 fi
 
 SKILL_NAME="deep-research"
 INSTALLED_ANY=false
 
-# -- Skill installation helper -------------------------------------------------
+# -- Skill installation helper (standard — copies overlay + core) --------------
 install_skill() {
-    local dest_dir="$1"   # full path to skill directory (no trailing slash)
-    local overlay="$2"    # which overlay to install as SKILL.md
-
+    local dest_dir="$1"   # full path to skill directory
+    local overlay="$2"    # source overlay file (absolute or relative to SCRIPT_DIR)
     mkdir -p "$dest_dir"
-    cp "$overlay"     "$dest_dir/SKILL.md"
-    cp "SKILL-core.md" "$dest_dir/SKILL-core.md"
+    cp "$SCRIPT_DIR/$overlay" "$dest_dir/SKILL.md"
+    cp "$SCRIPT_DIR/SKILL-core.md" "$dest_dir/SKILL-core.md"
     info "Skill installed → $dest_dir/"
 }
 
@@ -188,16 +186,14 @@ if [ "$DO_CLAUDE" = true ]; then
     fi
     install_skill "$DEST" "SKILL-claude-code.md"
 
-    # Generate .mcp.json template if it doesn't exist
     if [ ! -f ".mcp.json" ]; then
-        ABS_DIR="$SCRIPT_DIR"
         cat > .mcp.json <<MCPJSON
 {
   "mcpServers": {
     "deep-research": {
       "command": "python",
       "args": ["mcp_server.py"],
-      "cwd": "$ABS_DIR"
+      "cwd": "$SCRIPT_DIR"
     },
     "alphaxiv": {
       "type": "sse",
@@ -216,9 +212,61 @@ if [ "$DO_CLAUDE" = true ]; then
 MCPJSON
         info "Created .mcp.json for Claude Code (project-scoped MCP config)"
     else
-        info ".mcp.json already exists — skipping (add deep-research entry manually if needed)"
+        info ".mcp.json already exists — skipping"
+    fi
+    INSTALLED_ANY=true
+fi
+
+# -- Codex CLI -----------------------------------------------------------------
+if [ "$DO_CODEX" = true ]; then
+    echo ""
+    head_ "--- Codex CLI ---"
+    echo "Install scope:"
+    echo "  1) Personal -- ~/.codex/skills/    (all projects, recommended)"
+    echo "  2) Project  -- .codex/skills/       (this repo, trusted project required)"
+    printf "Choice [1]: "
+    read -r CODEX_SCOPE
+    CODEX_SCOPE="${CODEX_SCOPE:-1}"
+
+    if [ "$CODEX_SCOPE" = "2" ]; then
+        DEST=".codex/skills/$SKILL_NAME"
+    else
+        DEST="$HOME/.codex/skills/$SKILL_NAME"
     fi
 
+    # Codex requires agents/openai.yaml alongside SKILL.md and SKILL-core.md.
+    # Verify the source files exist before attempting any copies.
+    if [ ! -f "$SCRIPT_DIR/SKILL-codex.md" ]; then
+        error "SKILL-codex.md not found in $SCRIPT_DIR — cannot install Codex skill"
+    elif [ ! -f "$SCRIPT_DIR/agents/openai.yaml" ]; then
+        error "agents/openai.yaml not found in $SCRIPT_DIR — cannot install Codex skill"
+    else
+        mkdir -p "$DEST/agents"
+        cp "$SCRIPT_DIR/SKILL-codex.md"      "$DEST/SKILL.md"
+        cp "$SCRIPT_DIR/SKILL-core.md"        "$DEST/SKILL-core.md"
+        cp "$SCRIPT_DIR/agents/openai.yaml"   "$DEST/agents/openai.yaml"
+        info "Skill installed → $DEST/"
+
+        # MCP config (TOML)
+        if [ ! -f "$SCRIPT_DIR/.codex/config.toml" ]; then
+            warn ".codex/config.toml not found in repo — skipping MCP config copy"
+            warn "Create it manually or run: codex mcp add deep-research -- python $SCRIPT_DIR/mcp_server.py"
+        elif [ "$CODEX_SCOPE" = "2" ]; then
+            # Project-scoped: file is already at .codex/config.toml in this repo
+            info ".codex/config.toml present for project-scoped MCP (trusted project required)"
+        else
+            mkdir -p "$HOME/.codex"
+            if [ ! -f "$HOME/.codex/config.toml" ]; then
+                # Patch ${workspaceFolder} to the absolute project path
+                sed "s|\${workspaceFolder}|$SCRIPT_DIR|g" \
+                    "$SCRIPT_DIR/.codex/config.toml" > "$HOME/.codex/config.toml"
+                info "Copied .codex/config.toml → ~/.codex/config.toml (path patched)"
+            else
+                warn "~/.codex/config.toml already exists — skipping"
+                warn "Add the deep-research entry manually or run: codex mcp add deep-research -- python $SCRIPT_DIR/mcp_server.py"
+            fi
+        fi
+    fi
     INSTALLED_ANY=true
 fi
 
@@ -240,13 +288,11 @@ if [ "$DO_OPENCODE" = true ]; then
     fi
     install_skill "$DEST" "SKILL-opencode.md"
 
-    # opencode.json already exists in the repo; note it
     if [ -f "opencode.json" ]; then
         info "opencode.json present — MCP config already registered for OpenCode"
     else
         warn "opencode.json not found — copy the template from the repo root"
     fi
-
     INSTALLED_ANY=true
 fi
 
@@ -268,21 +314,18 @@ if [ "$DO_COPILOT_CLI" = true ]; then
     fi
     install_skill "$DEST" "SKILL-copilot.md"
 
-    # MCP config
     if [ "$CCLI_SCOPE" = "2" ]; then
-        info ".copilot/mcp-config.json already exists in repo for project-scoped use"
+        info ".copilot/mcp-config.json in repo used for project-scoped MCP"
     else
         mkdir -p "$HOME/.copilot"
         if [ ! -f "$HOME/.copilot/mcp-config.json" ]; then
-            # Patch the cwd in the MCP config to the absolute path of this repo
             sed "s|\"cwd\": \"\${workspaceFolder}\"|\"cwd\": \"$SCRIPT_DIR\"|g" \
-                .copilot/mcp-config.json > "$HOME/.copilot/mcp-config.json"
-            info "Copied MCP config → ~/.copilot/mcp-config.json (with absolute path patched)"
+                "$SCRIPT_DIR/.copilot/mcp-config.json" > "$HOME/.copilot/mcp-config.json"
+            info "Copied MCP config → ~/.copilot/mcp-config.json (path patched)"
         else
-            warn "~/.copilot/mcp-config.json already exists — skipping (merge deep-research entry manually)"
+            warn "~/.copilot/mcp-config.json already exists — skipping"
         fi
     fi
-
     INSTALLED_ANY=true
 fi
 
@@ -304,59 +347,11 @@ if [ "$DO_COPILOT_VSCODE" = true ]; then
     fi
     install_skill "$DEST" "SKILL-copilot.md"
 
-    # .vscode/mcp.json already exists in the repo; note it
     if [ -f ".vscode/mcp.json" ]; then
         info ".vscode/mcp.json present — MCP config already registered for VS Code"
     else
         warn ".vscode/mcp.json not found — copy the template from the repo"
     fi
-
-    INSTALLED_ANY=true
-fi
-
-# -- Codex CLI ----------------------------------------------------------------
-if [ "$DO_CODEX" = true ]; then
-    echo ""
-    head_ "--- Codex CLI ---"
-    echo "Install scope:"
-    echo "  1) Personal -- ~/.codex/skills/    (all projects, recommended)"
-    echo "  2) Project  -- .codex/skills/       (this repo, trusted project required)"
-    printf "Choice [1]: "
-    read -r CODEX_SCOPE
-    CODEX_SCOPE="${CODEX_SCOPE:-1}"
-
-    if [ "$CODEX_SCOPE" = "2" ]; then
-        DEST=".codex/skills/$SKILL_NAME"
-    else
-        DEST="$HOME/.codex/skills/$SKILL_NAME"
-    fi
-    # Codex skills also need the agents/openai.yaml alongside SKILL.md
-    mkdir -p "$DEST/agents"
-    cp "SKILL-codex.md"     "$DEST/SKILL.md"
-    cp "SKILL-core.md"      "$DEST/SKILL-core.md"
-    cp "agents/openai.yaml" "$DEST/agents/openai.yaml"
-    info "Skill installed → $DEST/"
-
-    # MCP config
-    if [ "$CODEX_SCOPE" = "2" ]; then
-        # Project-scoped: .codex/config.toml already in repo
-        mkdir -p ".codex"
-        if [ ! -f ".codex/config.toml" ]; then
-            cp ".codex/config.toml" ".codex/config.toml" 2>/dev/null ||                 cp /mnt/user-data/outputs/.codex/config.toml ".codex/config.toml"
-            info "Created .codex/config.toml for project-scoped MCP"
-        else
-            info ".codex/config.toml already exists — skipping"
-        fi
-    else
-        mkdir -p "$HOME/.codex"
-        if [ ! -f "$HOME/.codex/config.toml" ]; then
-            sed "s|\${workspaceFolder}|$SCRIPT_DIR|g"                 ".codex/config.toml" > "$HOME/.codex/config.toml"
-            info "Copied MCP config → ~/.codex/config.toml (absolute path patched)"
-        else
-            warn "~/.codex/config.toml already exists — skipping (merge deep-research entry manually)"
-        fi
-    fi
-
     INSTALLED_ANY=true
 fi
 
@@ -366,7 +361,7 @@ if [ "$INSTALLED_ANY" = false ]; then
 fi
 
 # ==============================================================================
-# PART 3 -- Next steps (tailored to what was installed)
+# PART 3 -- Next steps (tailored to selected platforms)
 # ==============================================================================
 
 echo ""
@@ -409,6 +404,23 @@ if [ "$DO_CLAUDE" = true ]; then
     echo ""
 fi
 
+if [ "$DO_CODEX" = true ]; then
+    echo "───────────────────────────────────────────"
+    echo "CODEX CLI"
+    echo ""
+    echo "  1. Ensure Codex is installed:"
+    echo "       npm install -g @github/codex"
+    echo "       # or: brew install openai-codex"
+    echo "  2. Run: codex"
+    echo "  3. Run /mcp to confirm all servers are connected."
+    echo "  4. Run /skills to browse; invoke with: \$deep-research"
+    echo "  5. Authenticate alphaxiv (OAuth, first use only):"
+    echo "       codex mcp login alphaxiv"
+    echo "  6. Example:"
+    echo "       \$deep-research research BESS arbitrage strategies in CAISO"
+    echo ""
+fi
+
 if [ "$DO_OPENCODE" = true ]; then
     echo "───────────────────────────────────────────"
     echo "OPENCODE"
@@ -443,22 +455,6 @@ if [ "$DO_COPILOT_VSCODE" = true ]; then
     echo "  4. Click the Auth CodeLens above the alphaxiv entry"
     echo "     in mcp.json to complete OAuth."
     echo "  5. Type: /deep-research <your research question>"
-    echo ""
-fi
-
-if [ "$DO_CODEX" = true ]; then
-    echo "───────────────────────────────────────────"
-    echo "CODEX CLI"
-    echo ""
-    echo "  1. Ensure codex is installed: npm install -g @github/codex"
-    echo "     (or: brew install openai-codex)"
-    echo "  2. Run: codex"
-    echo "  3. Run /mcp to confirm all servers are connected."
-    echo "  4. Run /skills to browse skills; invoke with: \$deep-research"
-    echo "  5. Authenticate alphaxiv (OAuth, first use only):"
-    echo "       codex mcp login alphaxiv"
-    echo "  6. Example usage:"
-    echo "       \$deep-research research BESS arbitrage strategies in CAISO"
     echo ""
 fi
 

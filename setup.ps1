@@ -79,9 +79,7 @@ pip install -q -r requirements.txt
 Write-OK "Python packages installed"
 
 # -- reports directory ---------------------------------------------------------
-if (-not (Test-Path "reports")) {
-    New-Item -ItemType Directory -Path "reports" | Out-Null
-}
+if (-not (Test-Path "reports")) { New-Item -ItemType Directory -Path "reports" | Out-Null }
 Write-OK "reports\ directory ready"
 
 # -- .env file -----------------------------------------------------------------
@@ -157,29 +155,31 @@ Write-Host ""
 Write-Host "Which agent platform(s) do you want to configure?"
 Write-Host ""
 Write-Host "  1) Claude Code"
-Write-Host "  2) OpenCode"
-Write-Host "  3) Copilot CLI"
-Write-Host "  4) Copilot VS Code"
-Write-Host "  5) Codex CLI"
+Write-Host "  2) Codex CLI"
+Write-Host "  3) OpenCode"
+Write-Host "  4) Copilot CLI"
+Write-Host "  5) Copilot VS Code"
 Write-Host "  6) All platforms"
 Write-Host "  7) Skip (manual setup later)"
 Write-Host ""
 $platformInput = Read-Host "Enter numbers separated by spaces (e.g. 1 2)"
 
-$doClaudeCode   = $platformInput -match "\b(1|6)\b"
-$doOpenCode     = $platformInput -match "\b(2|6)\b"
-$doCopilotCLI   = $platformInput -match "\b(3|6)\b"
-$doCopilotVSCode= $platformInput -match "\b(4|6)\b"
-$doCodex        = $platformInput -match "\b(5|6)\b"
+# Parse selections — "6" means all
+$doClaudeCode    = $platformInput -match "\b(1|6)\b"
+$doCodex         = $platformInput -match "\b(2|6)\b"
+$doOpenCode      = $platformInput -match "\b(3|6)\b"
+$doCopilotCLI    = $platformInput -match "\b(4|6)\b"
+$doCopilotVSCode = $platformInput -match "\b(5|6)\b"
 
-$skillName  = "deep-research"
+$skillName    = "deep-research"
 $installedAny = $false
 
+# -- Standard skill installer (overlay + core only) ----------------------------
 function Install-Skill {
     param([string]$DestDir, [string]$OverlayFile)
     New-Item -ItemType Directory -Path $DestDir -Force | Out-Null
-    Copy-Item $OverlayFile  (Join-Path $DestDir "SKILL.md")   -Force
-    Copy-Item "SKILL-core.md" (Join-Path $DestDir "SKILL-core.md") -Force
+    Copy-Item (Join-Path $ScriptDir $OverlayFile) (Join-Path $DestDir "SKILL.md")   -Force
+    Copy-Item (Join-Path $ScriptDir "SKILL-core.md") (Join-Path $DestDir "SKILL-core.md") -Force
     Write-OK "Skill installed -> $DestDir\"
 }
 
@@ -193,22 +193,19 @@ if ($doClaudeCode) {
     $ccScope = Read-Host "Choice [1]"
     if ([string]::IsNullOrEmpty($ccScope)) { $ccScope = "1" }
 
-    if ($ccScope -eq "2") {
-        $dest = ".claude\skills\$skillName"
-    } else {
-        $dest = Join-Path $env:USERPROFILE ".claude\skills\$skillName"
-    }
+    $dest = if ($ccScope -eq "2") { ".claude\skills\$skillName" }
+            else { Join-Path $env:USERPROFILE ".claude\skills\$skillName" }
     Install-Skill $dest "SKILL-claude-code.md"
 
     if (-not (Test-Path ".mcp.json")) {
-        $absDir = $ScriptDir
+        $escapedDir = $ScriptDir.Replace('\', '\\')
         $mcpJson = @"
 {
   "mcpServers": {
     "deep-research": {
       "command": "python",
       "args": ["mcp_server.py"],
-      "cwd": "$($absDir.Replace('\','\\'))"
+      "cwd": "$escapedDir"
     },
     "alphaxiv": {
       "type": "sse",
@@ -226,11 +223,67 @@ if ($doClaudeCode) {
 }
 "@
         $mcpJson | Set-Content ".mcp.json" -Encoding UTF8
-        Write-OK "Created .mcp.json for Claude Code (project-scoped MCP config)"
+        Write-OK "Created .mcp.json for Claude Code"
     } else {
         Write-OK ".mcp.json already exists -- skipping"
     }
+    $installedAny = $true
+}
 
+# -- Codex CLI -----------------------------------------------------------------
+if ($doCodex) {
+    Write-Host ""
+    Write-Head "--- Codex CLI ---"
+    Write-Host "Install scope:"
+    Write-Host "  1) Personal -- $env:USERPROFILE\.codex\skills\   (all projects, recommended)"
+    Write-Host "  2) Project  -- .codex\skills\                     (this repo, trusted project required)"
+    $codexScope = Read-Host "Choice [1]"
+    if ([string]::IsNullOrEmpty($codexScope)) { $codexScope = "1" }
+
+    $dest = if ($codexScope -eq "2") { ".codex\skills\$skillName" }
+            else { Join-Path $env:USERPROFILE ".codex\skills\$skillName" }
+
+    # Verify source files exist before copying
+    $skillSrc  = Join-Path $ScriptDir "SKILL-codex.md"
+    $coreSrc   = Join-Path $ScriptDir "SKILL-core.md"
+    $yamlSrc   = Join-Path $ScriptDir "agents\openai.yaml"
+    $tomlSrc   = Join-Path $ScriptDir ".codex\config.toml"
+
+    if (-not (Test-Path $skillSrc)) {
+        Write-Err "SKILL-codex.md not found in $ScriptDir -- cannot install Codex skill"
+    } elseif (-not (Test-Path $yamlSrc)) {
+        Write-Err "agents\openai.yaml not found in $ScriptDir -- cannot install Codex skill"
+    } else {
+        # Install skill files
+        New-Item -ItemType Directory -Path (Join-Path $dest "agents") -Force | Out-Null
+        Copy-Item $skillSrc  (Join-Path $dest "SKILL.md")              -Force
+        Copy-Item $coreSrc   (Join-Path $dest "SKILL-core.md")         -Force
+        Copy-Item $yamlSrc   (Join-Path $dest "agents\openai.yaml")    -Force
+        Write-OK "Skill installed -> $dest\"
+
+        # MCP config (TOML)
+        if (-not (Test-Path $tomlSrc)) {
+            Write-Warn ".codex\config.toml not found in repo -- skipping MCP config copy"
+            Write-Warn "Run: codex mcp add deep-research -- python $ScriptDir\mcp_server.py"
+        } elseif ($codexScope -eq "2") {
+            Write-OK ".codex\config.toml present for project-scoped MCP (trusted project required)"
+        } else {
+            $globalToml = Join-Path $env:USERPROFILE ".codex\config.toml"
+            if (-not (Test-Path $globalToml)) {
+                New-Item -ItemType Directory -Path (Split-Path $globalToml) -Force | Out-Null
+                $tomlContent = Get-Content $tomlSrc -Raw
+                # Replace ${workspaceFolder} with the absolute project path.
+                # Escape backslashes for TOML string literals.
+                $escapedDir  = $ScriptDir.Replace('\', '\\')
+                $tomlContent = $tomlContent -replace '\$\{workspaceFolder\}', $escapedDir
+                $tomlContent | Set-Content $globalToml -Encoding UTF8
+                Write-OK "Copied config.toml -> $globalToml (path patched)"
+            } else {
+                Write-Warn "$globalToml already exists -- skipping"
+                Write-Warn "Run: codex mcp add deep-research -- python $ScriptDir\mcp_server.py"
+            }
+        }
+    }
     $installedAny = $true
 }
 
@@ -244,19 +297,12 @@ if ($doOpenCode) {
     $ocScope = Read-Host "Choice [1]"
     if ([string]::IsNullOrEmpty($ocScope)) { $ocScope = "1" }
 
-    if ($ocScope -eq "2") {
-        $dest = Join-Path $env:USERPROFILE ".config\opencode\skills\$skillName"
-    } else {
-        $dest = ".opencode\skills\$skillName"
-    }
+    $dest = if ($ocScope -eq "2") { Join-Path $env:USERPROFILE ".config\opencode\skills\$skillName" }
+            else { ".opencode\skills\$skillName" }
     Install-Skill $dest "SKILL-opencode.md"
 
-    if (Test-Path "opencode.json") {
-        Write-OK "opencode.json present -- MCP config already registered for OpenCode"
-    } else {
-        Write-Warn "opencode.json not found -- copy the template from the repo root"
-    }
-
+    if (Test-Path "opencode.json") { Write-OK "opencode.json present -- MCP config ready" }
+    else { Write-Warn "opencode.json not found -- copy the template from the repo root" }
     $installedAny = $true
 }
 
@@ -270,11 +316,8 @@ if ($doCopilotCLI) {
     $ccliScope = Read-Host "Choice [1]"
     if ([string]::IsNullOrEmpty($ccliScope)) { $ccliScope = "1" }
 
-    if ($ccliScope -eq "2") {
-        $dest = ".github\skills\$skillName"
-    } else {
-        $dest = Join-Path $env:USERPROFILE ".copilot\skills\$skillName"
-    }
+    $dest = if ($ccliScope -eq "2") { ".github\skills\$skillName" }
+            else { Join-Path $env:USERPROFILE ".copilot\skills\$skillName" }
     Install-Skill $dest "SKILL-copilot.md"
 
     if ($ccliScope -eq "2") {
@@ -282,17 +325,16 @@ if ($doCopilotCLI) {
     } else {
         $globalMcp = Join-Path $env:USERPROFILE ".copilot\mcp-config.json"
         if (-not (Test-Path $globalMcp)) {
-            # Copy and patch the cwd to an absolute path
-            $mcpContent = Get-Content ".copilot\mcp-config.json" -Raw
-            $mcpContent = $mcpContent -replace '"\$\{workspaceFolder\}"', "`"$($ScriptDir.Replace('\','\\'))`""
+            $mcpContent = Get-Content (Join-Path $ScriptDir ".copilot\mcp-config.json") -Raw
+            $escapedDir  = $ScriptDir.Replace('\', '\\')
+            $mcpContent  = $mcpContent -replace '"\$\{workspaceFolder\}"', "`"$escapedDir`""
             New-Item -ItemType Directory -Path (Split-Path $globalMcp) -Force | Out-Null
             $mcpContent | Set-Content $globalMcp -Encoding UTF8
-            Write-OK "Copied MCP config -> $globalMcp (absolute path patched)"
+            Write-OK "Copied MCP config -> $globalMcp (path patched)"
         } else {
-            Write-Warn "$globalMcp already exists -- skipping (merge deep-research entry manually)"
+            Write-Warn "$globalMcp already exists -- skipping"
         }
     }
-
     $installedAny = $true
 }
 
@@ -306,64 +348,12 @@ if ($doCopilotVSCode) {
     $cvscScope = Read-Host "Choice [1]"
     if ([string]::IsNullOrEmpty($cvscScope)) { $cvscScope = "1" }
 
-    if ($cvscScope -eq "2") {
-        $dest = Join-Path $env:USERPROFILE ".config\copilot\skills\$skillName"
-    } else {
-        $dest = ".github\skills\$skillName"
-    }
+    $dest = if ($cvscScope -eq "2") { Join-Path $env:USERPROFILE ".config\copilot\skills\$skillName" }
+            else { ".github\skills\$skillName" }
     Install-Skill $dest "SKILL-copilot.md"
 
-    if (Test-Path ".vscode\mcp.json") {
-        Write-OK ".vscode\mcp.json present -- MCP config already registered for VS Code"
-    } else {
-        Write-Warn ".vscode\mcp.json not found -- copy the template from the repo"
-    }
-
-    $installedAny = $true
-}
-
-# -- Codex CLI ----------------------------------------------------------------
-if ($doCodex) {
-    Write-Host ""
-    Write-Head "--- Codex CLI ---"
-    Write-Host "Install scope:"
-    Write-Host "  1) Personal -- $env:USERPROFILE\.codex\skills\   (all projects, recommended)"
-    Write-Host "  2) Project  -- .codex\skills\                       (this repo, trusted project required)"
-    $codexScope = Read-Host "Choice [1]"
-    if ([string]::IsNullOrEmpty($codexScope)) { $codexScope = "1" }
-
-    if ($codexScope -eq "2") {
-        $dest = ".codex\skills\$skillName"
-    } else {
-        $dest = Join-Path $env:USERPROFILE ".codex\skills\$skillName"
-    }
-
-    # Codex skills also need agents/openai.yaml alongside SKILL.md
-    New-Item -ItemType Directory -Path (Join-Path $dest "agents") -Force | Out-Null
-    Copy-Item "SKILL-codex.md"     (Join-Path $dest "SKILL.md") -Force
-    Copy-Item "SKILL-core.md"      (Join-Path $dest "SKILL-core.md") -Force
-    Copy-Item "agents\openai.yaml" (Join-Path $dest "agents\openai.yaml") -Force
-    Write-OK "Skill installed -> $dest\"
-
-    if ($codexScope -eq "2") {
-        if (-not (Test-Path ".codex\config.toml")) {
-            Write-Warn ".codex\config.toml not found -- copy it from the repo root"
-        } else {
-            Write-OK ".codex\config.toml present for project-scoped MCP"
-        }
-    } else {
-        $globalToml = Join-Path $env:USERPROFILE ".codex\config.toml"
-        if (-not (Test-Path $globalToml)) {
-            New-Item -ItemType Directory -Path (Split-Path $globalToml) -Force | Out-Null
-            $tomlContent = Get-Content ".codex\config.toml" -Raw
-            $tomlContent = $tomlContent -replace '\$\{workspaceFolder\}', $ScriptDir.Replace('', '\')
-            $tomlContent | Set-Content $globalToml -Encoding UTF8
-            Write-OK "Copied MCP config -> $globalToml (absolute path patched)"
-        } else {
-            Write-Warn "$globalToml already exists -- skipping (merge deep-research entry manually)"
-        }
-    }
-
+    if (Test-Path ".vscode\mcp.json") { Write-OK ".vscode\mcp.json present -- MCP config ready" }
+    else { Write-Warn ".vscode\mcp.json not found -- copy the template from the repo" }
     $installedAny = $true
 }
 
@@ -416,6 +406,23 @@ if ($doClaudeCode) {
     Write-Host ""
 }
 
+if ($doCodex) {
+    Write-Sep
+    Write-Host "CODEX CLI"
+    Write-Host ""
+    Write-Host "  1. Ensure Codex is installed:"
+    Write-Host "       npm install -g @github/codex"
+    Write-Host "       # or: winget install OpenAI.Codex"
+    Write-Host "  2. Run: codex"
+    Write-Host "  3. Run /mcp to confirm all servers are connected."
+    Write-Host "  4. Run /skills to browse; invoke with: `$deep-research"
+    Write-Host "  5. Authenticate alphaxiv (OAuth, first use only):"
+    Write-Host "       codex mcp login alphaxiv"
+    Write-Host "  6. Example:"
+    Write-Host "       `$deep-research research BESS arbitrage strategies in CAISO"
+    Write-Host ""
+}
+
 if ($doOpenCode) {
     Write-Sep
     Write-Host "OPENCODE"
@@ -450,23 +457,6 @@ if ($doCopilotVSCode) {
     Write-Host "  4. Click the Auth CodeLens above the alphaxiv entry"
     Write-Host "     in mcp.json to complete OAuth."
     Write-Host "  5. Type: /deep-research <your research question>"
-    Write-Host ""
-}
-
-if ($doCodex) {
-    Write-Sep
-    Write-Host "CODEX CLI"
-    Write-Host ""
-    Write-Host "  1. Ensure codex is installed:"
-    Write-Host "       npm install -g @github/codex"
-    Write-Host "       # or: winget install OpenAI.Codex"
-    Write-Host "  2. Run: codex"
-    Write-Host "  3. Run /mcp to confirm all servers are connected."
-    Write-Host "  4. Run /skills to browse; invoke with: `$deep-research"
-    Write-Host "  5. Authenticate alphaxiv (OAuth, first use only):"
-    Write-Host "       codex mcp login alphaxiv"
-    Write-Host "  6. Example:"
-    Write-Host "       `$deep-research research BESS arbitrage in CAISO"
     Write-Host ""
 }
 
