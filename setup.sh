@@ -238,7 +238,7 @@ if [ "$DO_CODEX" = true ]; then
     # Verify the source files exist before attempting any copies.
     if [ ! -f "$SCRIPT_DIR/SKILL-codex.md" ]; then
         error "SKILL-codex.md not found in $SCRIPT_DIR — cannot install Codex skill"
-    elif [ ! -f "$SCRIPT_DIR/agents/openai.yaml" ]; then
+    elif [ ! -f "$SCRIPT_DIR/openai.yaml" ]; then
         error "agents/openai.yaml not found in $SCRIPT_DIR — cannot install Codex skill"
     else
         mkdir -p "$DEST/agents"

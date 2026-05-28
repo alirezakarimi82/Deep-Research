@@ -258,7 +258,7 @@ if ($doCodex) {
         New-Item -ItemType Directory -Path (Join-Path $dest "agents") -Force | Out-Null
         Copy-Item $skillSrc  (Join-Path $dest "SKILL.md")              -Force
         Copy-Item $coreSrc   (Join-Path $dest "SKILL-core.md")         -Force
-        Copy-Item $yamlSrc   (Join-Path $dest "agents\openai.yaml")    -Force
+        Copy-Item $yamlSrc   (Join-Path $dest "openai.yaml")    -Force
         Write-OK "Skill installed -> $dest\"
 
         # MCP config (TOML)
