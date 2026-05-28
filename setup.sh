@@ -239,12 +239,12 @@ if [ "$DO_CODEX" = true ]; then
     if [ ! -f "$SCRIPT_DIR/SKILL-codex.md" ]; then
         error "SKILL-codex.md not found in $SCRIPT_DIR — cannot install Codex skill"
     elif [ ! -f "$SCRIPT_DIR/openai.yaml" ]; then
-        error "agents/openai.yaml not found in $SCRIPT_DIR — cannot install Codex skill"
+        error "openai.yaml not found in $SCRIPT_DIR — cannot install Codex skill"
     else
         mkdir -p "$DEST/agents"
         cp "$SCRIPT_DIR/SKILL-codex.md"      "$DEST/SKILL.md"
         cp "$SCRIPT_DIR/SKILL-core.md"        "$DEST/SKILL-core.md"
-        cp "$SCRIPT_DIR/agents/openai.yaml"   "$DEST/agents/openai.yaml"
+        cp "$SCRIPT_DIR/openai.yaml"   "$DEST/agents/openai.yaml"
         info "Skill installed → $DEST/"
 
         # MCP config (TOML)

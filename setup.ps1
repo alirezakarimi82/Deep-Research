@@ -246,13 +246,13 @@ if ($doCodex) {
     # Verify source files exist before copying
     $skillSrc  = Join-Path $ScriptDir "SKILL-codex.md"
     $coreSrc   = Join-Path $ScriptDir "SKILL-core.md"
-    $yamlSrc   = Join-Path $ScriptDir "agents\openai.yaml"
+    $yamlSrc   = Join-Path $ScriptDir "openai.yaml"
     $tomlSrc   = Join-Path $ScriptDir ".codex\config.toml"
 
     if (-not (Test-Path $skillSrc)) {
         Write-Err "SKILL-codex.md not found in $ScriptDir -- cannot install Codex skill"
     } elseif (-not (Test-Path $yamlSrc)) {
-        Write-Err "agents\openai.yaml not found in $ScriptDir -- cannot install Codex skill"
+        Write-Err "openai.yaml not found in $ScriptDir -- cannot install Codex skill"
     } else {
         # Install skill files
         New-Item -ItemType Directory -Path (Join-Path $dest "agents") -Force | Out-Null
