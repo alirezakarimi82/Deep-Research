@@ -247,7 +247,7 @@ if ($doCodex) {
     $skillSrc  = Join-Path $ScriptDir "SKILL-codex.md"
     $coreSrc   = Join-Path $ScriptDir "SKILL-core.md"
     $yamlSrc   = Join-Path $ScriptDir "openai.yaml"
-    $tomlSrc   = Join-Path $ScriptDir ".codex\config.toml"
+    $tomlSrc   = Join-Path $ScriptDir "config.toml"
 
     if (-not (Test-Path $skillSrc)) {
         Write-Err "SKILL-codex.md not found in $ScriptDir -- cannot install Codex skill"
@@ -263,10 +263,10 @@ if ($doCodex) {
 
         # MCP config (TOML)
         if (-not (Test-Path $tomlSrc)) {
-            Write-Warn ".codex\config.toml not found in repo -- skipping MCP config copy"
+            Write-Warn "config.toml not found in repo -- skipping MCP config copy"
             Write-Warn "Run: codex mcp add deep-research -- python $ScriptDir\mcp_server.py"
         } elseif ($codexScope -eq "2") {
-            Write-OK ".codex\config.toml present for project-scoped MCP (trusted project required)"
+            Write-OK "config.toml present for project-scoped MCP (trusted project required)"
         } else {
             $globalToml = Join-Path $env:USERPROFILE ".codex\config.toml"
             if (-not (Test-Path $globalToml)) {

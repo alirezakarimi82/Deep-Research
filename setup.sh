@@ -234,7 +234,7 @@ if [ "$DO_CODEX" = true ]; then
         DEST="$HOME/.codex/skills/$SKILL_NAME"
     fi
 
-    # Codex requires agents/openai.yaml alongside SKILL.md and SKILL-core.md.
+    # Codex requires openai.yaml alongside SKILL.md and SKILL-core.md.
     # Verify the source files exist before attempting any copies.
     if [ ! -f "$SCRIPT_DIR/SKILL-codex.md" ]; then
         error "SKILL-codex.md not found in $SCRIPT_DIR — cannot install Codex skill"
@@ -248,19 +248,19 @@ if [ "$DO_CODEX" = true ]; then
         info "Skill installed → $DEST/"
 
         # MCP config (TOML)
-        if [ ! -f "$SCRIPT_DIR/.codex/config.toml" ]; then
-            warn ".codex/config.toml not found in repo — skipping MCP config copy"
+        if [ ! -f "$SCRIPT_DIR/config.toml" ]; then
+            warn "config.toml not found in repo — skipping MCP config copy"
             warn "Create it manually or run: codex mcp add deep-research -- python $SCRIPT_DIR/mcp_server.py"
         elif [ "$CODEX_SCOPE" = "2" ]; then
-            # Project-scoped: file is already at .codex/config.toml in this repo
-            info ".codex/config.toml present for project-scoped MCP (trusted project required)"
+            # Project-scoped: file is already at config.toml in this repo
+            info "config.toml present for project-scoped MCP (trusted project required)"
         else
             mkdir -p "$HOME/.codex"
             if [ ! -f "$HOME/.codex/config.toml" ]; then
                 # Patch ${workspaceFolder} to the absolute project path
                 sed "s|\${workspaceFolder}|$SCRIPT_DIR|g" \
-                    "$SCRIPT_DIR/.codex/config.toml" > "$HOME/.codex/config.toml"
-                info "Copied .codex/config.toml → ~/.codex/config.toml (path patched)"
+                    "$SCRIPT_DIR/config.toml" > "$HOME/.codex/config.toml"
+                info "Copied config.toml → ~/.codex/config.toml (path patched)"
             else
                 warn "~/.codex/config.toml already exists — skipping"
                 warn "Add the deep-research entry manually or run: codex mcp add deep-research -- python $SCRIPT_DIR/mcp_server.py"
