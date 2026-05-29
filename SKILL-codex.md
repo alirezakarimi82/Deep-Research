@@ -44,7 +44,7 @@ OpenCode, and Copilot.
 > without confirmation), or `full-auto` (edits + runs shell commands).
 > For research tasks that write many intermediate files, `auto-edit` is
 > recommended. Run `codex --approval-mode auto-edit` or set
-> `approval_mode = "auto-edit"` in `~/.codex/config.toml`.
+> `approval_mode = "auto-edit"` in `~/codex-config.toml`.
 
 ---
 
@@ -157,9 +157,9 @@ codex mcp show alphaxiv
    export OPENALEX_API_KEY="your_key_here"
    ```
 
-3. **Register MCP servers** — the shipped `.codex/config.toml` in
+3. **Register MCP servers** — the shipped `codex-config.toml` in
    this repo is ready for project-scoped use (trusted projects only).
-   For global setup, copy to `~/.codex/config.toml`.
+   For global setup, copy to `~/codex-config.toml`.
    Or register interactively:
    ```bash
    codex mcp add deep-research -- python /absolute/path/to/mcp_server.py
@@ -178,13 +178,13 @@ codex mcp show alphaxiv
    mkdir -p ~/.codex/skills/deep-research
    cp SKILL-codex.md     ~/.codex/skills/deep-research/SKILL.md
    cp SKILL-core.md      ~/.codex/skills/deep-research/SKILL-core.md
-   cp agents/openai.yaml ~/.codex/skills/deep-research/agents/openai.yaml
+   cp openai.yaml ~/.codex/skills/deep-research/openai.yaml
 
    # Project-scoped (this repo, trusted project required)
-   mkdir -p .codex/skills/deep-research/agents
+   mkdir -p .codex/skills/deep-research/
    cp SKILL-codex.md     .codex/skills/deep-research/SKILL.md
    cp SKILL-core.md      .codex/skills/deep-research/SKILL-core.md
-   cp agents/openai.yaml .codex/skills/deep-research/agents/openai.yaml
+   cp openai.yaml .codex/skills/deep-research/openai.yaml
    ```
    Restart Codex after installing. Verify with `/skills`.
 
@@ -200,7 +200,7 @@ codex mcp show alphaxiv
 - MCP config is TOML, not JSON. Syntax errors (missing quotes, wrong
   bracket style) silently break server registration. Validate with
   `codex mcp list` after editing.
-- The `.codex/config.toml` project scope only works in **trusted**
+- The `codex-config.toml` project scope only works in **trusted**
   projects. Trust a project with `codex trust` or via the Codex app.
 - If a stdio MCP server isn't starting, check that the command is on
   the `PATH` Codex inherits. Use an absolute path in `config.toml` if

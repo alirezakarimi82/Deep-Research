@@ -48,7 +48,7 @@ User request → Plan → Gather (MCP tools) → Rank → Retrieve → Synthesis
 | Local stdio MCP servers | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Remote SSE MCP servers | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Skill files (SKILL.md) | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `agents/openai.yaml` metadata | — | — | — | — | ✅ |
+| `openai.yaml` metadata | — | — | — | — | ✅ |
 | AGENTS.md project context | ✅ | ✅ | — | — | ✅ |
 | MCP config format | JSON | JSON | JSON | JSON | **TOML** |
 | Structured `askUser` tool | ✅ | ✅ | prose only | prose only | prose only |
@@ -78,7 +78,7 @@ export OPENALEX_API_KEY="..."        # optional
 
 # 3. Start your agent
 claude                 # Claude Code — reads .mcp.json / .claude/mcp.json
-codex                  # Codex CLI   — reads .codex/config.toml
+codex                  # Codex CLI   — reads codex-config.toml
 opencode               # OpenCode    — reads opencode.json
 copilot                # Copilot CLI — reads .copilot/mcp-config.json
 # VS Code: open workspace, Copilot Chat → mode dropdown → Agent
@@ -421,11 +421,11 @@ and pass `--no-interactive`.
 ### MCP configuration
 
 Codex uses **TOML** for MCP config — the only platform in this stack
-that doesn't use JSON. The shipped `.codex/config.toml` is ready for
+that doesn't use JSON. The shipped `codex-config.toml` is ready for
 project-scoped use (trusted projects only). For global setup:
 
 ```bash
-cp .codex/config.toml ~/.codex/config.toml
+cp codex-config.toml ~/codex-config.toml
 # Edit the deep-research cwd to the absolute path of this directory
 ```
 
@@ -438,8 +438,8 @@ codex mcp add alphaxiv --url https://api.alphaxiv.org/mcp/v1
 ```
 
 Config precedence (highest → lowest):
-1. `~/.codex/config.toml` (global)
-2. `.codex/config.toml` in a trusted project (project-scoped)
+1. `~/codex-config.toml` (global)
+2. `codex-config.toml` in a trusted project (project-scoped)
 
 Trust a project so project-scoped config is read:
 
@@ -465,21 +465,21 @@ Skills go in `~/.codex/skills/` (personal) or `.codex/skills/`
 for cross-platform skill sharing.
 
 Unlike other platforms, Codex skills support an optional
-`agents/openai.yaml` alongside `SKILL.md` for UI metadata and
-invocation policy. This repo ships it at `agents/openai.yaml`.
+`openai.yaml` alongside `SKILL.md` for UI metadata and
+invocation policy. This repo ships it at `openai.yaml`.
 
 ```bash
 # Personal (recommended)
-mkdir -p ~/.codex/skills/deep-research/agents
+mkdir -p ~/.codex/skills/deep-research/
 cp SKILL-codex.md     ~/.codex/skills/deep-research/SKILL.md
 cp SKILL-core.md      ~/.codex/skills/deep-research/SKILL-core.md
-cp agents/openai.yaml ~/.codex/skills/deep-research/agents/openai.yaml
+cp openai.yaml ~/.codex/skills/deep-research/openai.yaml
 
 # Project-scoped (trusted project required)
-mkdir -p .codex/skills/deep-research/agents
+mkdir -p .codex/skills/deep-research/
 cp SKILL-codex.md     .codex/skills/deep-research/SKILL.md
 cp SKILL-core.md      .codex/skills/deep-research/SKILL-core.md
-cp agents/openai.yaml .codex/skills/deep-research/agents/openai.yaml
+cp openai.yaml .codex/skills/deep-research/openai.yaml
 ```
 
 Restart Codex after installing. Verify with `/skills`.
@@ -515,7 +515,7 @@ tasks.
 ```bash
 codex
 
-# Explicit invocation (required — see agents/openai.yaml)
+# Explicit invocation (required — see openai.yaml)
 $deep-research  research BESS degradation and bidding strategies in CAISO
 
 # Or reference the skill by description
@@ -542,13 +542,13 @@ per-file confirmation. Review the final report before accepting.
 | `SKILL-claude-code.md` | Claude Code overlay — verb → tool mapping, plan-mode flow, `AskUserQuestion` schema, `Agent` subagents. |
 | `SKILL-opencode.md` | OpenCode overlay — verb → tool mapping, write-plan-then-confirm flow, `question` schema, `Task` subagents. |
 | `SKILL-copilot.md` | Copilot overlay covering both CLI and VS Code — verb → tool mapping, prose-question flow, `/fleet` and `.agent.md` subagents, `.tasks.md` tracker. |
-| `SKILL-codex.md` | Codex CLI overlay — verb → tool mapping, prose-question flow, Agents SDK subagents, `.tasks.md` tracker, `agents/openai.yaml` invocation policy. |
+| `SKILL-codex.md` | Codex CLI overlay — verb → tool mapping, prose-question flow, Agents SDK subagents, `.tasks.md` tracker, `openai.yaml` invocation policy. |
 
 Each overlay's first instruction is to read `SKILL-core.md` from the
 same directory. Both files **must** be installed together.
 
 For Codex CLI, the skill directory must also contain
-`agents/openai.yaml` (shipped in `agents/openai.yaml` at the repo root).
+`openai.yaml` (shipped in `openai.yaml` at the repo root).
 
 ---
 
@@ -709,10 +709,9 @@ deep-research/
 │   └── mcp-config.json         Copilot CLI MCP config (project-scoped)
 ├── .vscode/
 │   └── mcp.json                VS Code Copilot MCP config (workspace-scoped)
-├── .codex/
-│   └── config.toml             Codex CLI MCP config in TOML (project-scoped, trusted projects)
-├── agents/
-│   └── openai.yaml             Codex skill metadata and invocation policy
+├── codex-config.toml           Codex CLI MCP config template (copy → ~/.codex/config.toml or .codex/config.toml)
+├── openai.yaml                 Codex skill metadata and invocation policy
+
 │
 ├── sources/
 │   ├── academic/
@@ -1003,13 +1002,13 @@ executing, check the mode dropdown.
 | `SKILL-claude-code.md` | Claude Code overlay — verb → tool mapping, plan-mode flow, `AskUserQuestion` schema, `Agent` subagents. |
 | `SKILL-opencode.md` | OpenCode overlay — verb → tool mapping, write-plan-then-confirm flow, `question` schema, `Task` subagents. |
 | `SKILL-copilot.md` | Copilot overlay covering both CLI and VS Code — verb → tool mapping, prose-question flow, `/fleet` and `.agent.md` subagents, `.tasks.md` tracker. |
-| `SKILL-codex.md` | Codex CLI overlay — verb → tool mapping, prose-question flow, Agents SDK subagents, `.tasks.md` tracker, `agents/openai.yaml` invocation policy. |
+| `SKILL-codex.md` | Codex CLI overlay — verb → tool mapping, prose-question flow, Agents SDK subagents, `.tasks.md` tracker, `openai.yaml` invocation policy. |
 
 Each overlay's first instruction is to read `SKILL-core.md` from the
 same directory. Both files **must** be installed together.
 
 For Codex CLI, the skill directory must also contain
-`agents/openai.yaml` (shipped in `agents/openai.yaml` at the repo root).
+`openai.yaml` (shipped in `openai.yaml` at the repo root).
 
 ---
 
@@ -1170,10 +1169,9 @@ deep-research/
 │   └── mcp-config.json         Copilot CLI MCP config (project-scoped)
 ├── .vscode/
 │   └── mcp.json                VS Code Copilot MCP config (workspace-scoped)
-├── .codex/
-│   └── config.toml             Codex CLI MCP config in TOML (project-scoped, trusted projects)
-├── agents/
-│   └── openai.yaml             Codex skill metadata and invocation policy
+
+├── openai.yaml                 Codex skill metadata and invocation policy
+
 │
 ├── sources/
 │   ├── academic/
