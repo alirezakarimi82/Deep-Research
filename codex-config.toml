@@ -28,17 +28,10 @@ args    = ["mcp_server.py"]
 # ${workspaceFolder} works in project-scoped config; use an absolute path
 # in the global ~/.codex/config.toml.
 cwd = "."
+env_vars = ["OPENALEX_API_KEY", "SEMANTIC_SCHOLAR_KEY", "UNPAYWALL_EMAIL"]
 
 startup_timeout_sec = 30
 tool_timeout_sec    = 60
-
-# Pass API keys to the server from the environment.
-# Values are read from the shell env (or .env via config.py) at launch.
-# Leave these empty here — populate them via .env or shell exports instead.
-[mcp_servers.deep-research.env]
-OPENALEX_API_KEY      = ""
-SEMANTIC_SCHOLAR_KEY  = ""
-UNPAYWALL_EMAIL       = ""
 
 # ---------------------------------------------------------------------------
 # alphaxiv  —  remote SSE server (OAuth required)
