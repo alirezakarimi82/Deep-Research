@@ -252,15 +252,21 @@ if [ "$DO_CODEX" = true ]; then
             warn "codex-config.toml not found in repo — skipping MCP config copy"
             warn "Create it manually or run: codex mcp add deep-research -- python $SCRIPT_DIR/mcp_server.py"
         elif [ "$CODEX_SCOPE" = "2" ]; then
-            # Project-scoped: file is already at .codex/config.toml in this repo
-            info "codex-config.toml present for project-scoped MCP (trusted project required)"
+            # Project-scoped: copy codex-config.toml → .codex/config.toml
+            mkdir -p ".codex"
+            if [ ! -f ".codex/config.toml" ]; then
+                cp "$SCRIPT_DIR/codex-config.toml" ".codex/config.toml"
+                info "Copied codex-config.toml → .codex/config.toml (project-scoped, trusted project required)"
+            else
+                info ".codex/config.toml already exists — skipping"
+            fi
         else
+            # Personal: copy to ~/.codex/config.toml with path patched
             mkdir -p "$HOME/.codex"
             if [ ! -f "$HOME/.codex/config.toml" ]; then
-                # Patch ${workspaceFolder} to the absolute project path
                 sed "s|\${workspaceFolder}|$SCRIPT_DIR|g" \
                     "$SCRIPT_DIR/codex-config.toml" > "$HOME/.codex/config.toml"
-                info "Copied .codex/config.toml → ~/.codex/config.toml (path patched)"
+                info "Copied codex-config.toml → ~/.codex/config.toml (path patched)"
             else
                 warn "~/.codex/config.toml already exists — skipping"
                 warn "Add the deep-research entry manually or run: codex mcp add deep-research -- python $SCRIPT_DIR/mcp_server.py"

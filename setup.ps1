@@ -266,7 +266,15 @@ if ($doCodex) {
             Write-Warn "codex-config.toml not found in repo -- skipping MCP config copy"
             Write-Warn "Run: codex mcp add deep-research -- python $ScriptDir\mcp_server.py"
         } elseif ($codexScope -eq "2") {
-            Write-OK "codex-config.toml present for project-scoped MCP (trusted project required)"
+            # Project-scoped: copy codex-config.toml → .codex/config.toml
+            New-Item -ItemType Directory -Path ".codex" -Force | Out-Null
+            $projectToml = ".codex\config.toml"
+            if (-not (Test-Path $projectToml)) {
+                Copy-Item $tomlSrc $projectToml -Force
+                Write-OK "Copied codex-config.toml -> .codex\config.toml (project-scoped, trusted project required)"
+            } else {
+                Write-OK ".codex\config.toml already exists -- skipping"
+            }
         } else {
             $globalToml = Join-Path $env:USERPROFILE ".codex\config.toml"
             if (-not (Test-Path $globalToml)) {
