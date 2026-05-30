@@ -25,8 +25,8 @@ command = "python"
 args    = ["mcp_server.py"]
 
 # cwd is the absolute path to the deep-research repo.
-# ${workspaceFolder} works in project-scoped config; use an absolute path
-# in the global ~/.codex/config.toml.
+# "." works in project-scoped config.
+# use an absolute path in the global ~/.codex/config.toml.
 cwd = "."
 env_vars = ["OPENALEX_API_KEY", "SEMANTIC_SCHOLAR_KEY", "UNPAYWALL_EMAIL"]
 
